@@ -47,10 +47,12 @@ function adv_spawning.initialize()
 	adv_spawning.quota_reload = 100
 	adv_spawning.quota_left = adv_spawning.quota_reload
 	adv_spawning.max_spawns_per_spawner = 2
-	adv_spawning.spawner_distance = 100
+	adv_spawning.spawner_distance = 70
 	adv_spawning.max_spawning_frequency_hz = 5
+	adv_spawning.max_mapgen_tries_per_step = 3
 
 	adv_spawning.spawner_definitions = {}
+	adv_spawning.mapgen_jobqueue = {}
 	adv_spawning.statistics =
 	{
 		session =
@@ -110,33 +112,41 @@ end
 -- @param blockseed seed for this block
 --------------------------------------------------------------------------------
 function adv_spawning.mapgen_hook(minp,maxp,blockseed)
+	if adv_spawning.quota_enter(true) then
+		--find positions within current block to place a spawner seed
+		local start_x =
+			math.floor(minp.x/adv_spawning.spawner_distance)
+			* adv_spawning.spawner_distance
+		local start_y =
+			(math.floor(minp.y/adv_spawning.spawner_distance)
+				* adv_spawning.spawner_distance) +20
+		local start_z =
+			math.floor(minp.z/adv_spawning.spawner_distance)
+			* adv_spawning.spawner_distance
 
-	--find positions within current block to place a spawner seed
-	local start_x =
-		math.floor(minp.x/adv_spawning.spawner_distance)
-		* adv_spawning.spawner_distance
-	local start_y =
-		(math.floor(minp.y/adv_spawning.spawner_distance)
-			* adv_spawning.spawner_distance) +20
-	local start_z =
-		math.floor(minp.z/adv_spawning.spawner_distance)
-		* adv_spawning.spawner_distance
+		for x=start_x,maxp.x,adv_spawning.spawner_distance do
+		for y=start_y,maxp.y,adv_spawning.spawner_distance do
+		for z=start_z,maxp.z,adv_spawning.spawner_distance do
 
-	for x=start_x,maxp.x,adv_spawning.spawner_distance do
-	for y=start_y,maxp.y,adv_spawning.spawner_distance do
-	for z=start_z,maxp.z,adv_spawning.spawner_distance do
-
-		if x > minp.x and
-			y > minp.y and
-			z > minp.z then
-			minetest.add_entity({x=x,y=y,z=z},"adv_spawning:spawn_seed")
-			--adv_spawning.log("info", "adv_spawning: adding spawner entity at "
-			--	.. minetest.pos_to_string({x=x,y=y,z=z}))
-			adv_spawning.statistics.session.spawners_created =
-				adv_spawning.statistics.session.spawners_created +1
+			if x > minp.x and
+				y > minp.y and
+				z > minp.z then
+				adv_spawning.quota_leave()
+				minetest.add_entity({x=x,y=y,z=z},"adv_spawning:spawn_seed")
+				adv_spawning.quota_enter(true)
+				adv_spawning.log("info", "adv_spawning: adding spawner entity at "
+					.. minetest.pos_to_string({x=x,y=y,z=z}))
+				adv_spawning.statistics.session.spawners_created =
+					adv_spawning.statistics.session.spawners_created +1
+			end
 		end
-	end
-	end
+		end
+		end
+
+		adv_spawning.queue_mapgen_jobs(minp,maxp)
+		adv_spawning.quota_leave()
+	else
+		assert("Mapgen hook could not be executed" == nil)
 	end
 end
 
@@ -174,33 +184,51 @@ function adv_spawning.global_onstep(dtime)
 			adv_spawning.statistics.session.steps
 
 	adv_spawning.quota_left = adv_spawning.quota_reload
+
+	if adv_spawning.quota_enter() then
+		adv_spawning.handle_mapgen_spawning()
+		adv_spawning.quota_leave()
+	end
 end
 
 --------------------------------------------------------------------------------
 -- @function [parent=#adv_spawning] quota_enter
+-- @param force ignore quota but start calculation
 -- @return true/false
 --------------------------------------------------------------------------------
-function adv_spawning.quota_enter()
+function adv_spawning.quota_enter(force)
 	--ONLY enable this one if you're quite sure there aren't bugs in
 	--assert(adv_spawning.quota_starttime == nil)
 
 	if adv_spawning.quota_left <= 0 then
 		print("Quota: no time left: " .. adv_spawning.quota_left)
-		return false
+		if force == true then
+			print("Quota: task is too important to skip do it anyway")
+		else
+			return false
+		end
 	end
-	--print("+++++++++++++++++Quota enter+++++++++++++++++++++")
-	--print(debug.traceback())
-	--print("+++++++++++++++++++++++++++++++++++++++++++++++++")
+--	print("+++++++++++++++++Quota enter+++++++++++++++++++++")
+--	print(debug.traceback())
+--	print("+++++++++++++++++++++++++++++++++++++++++++++++++")
 	adv_spawning.quota_starttime = adv_spawning.gettime()
 	return true
 end
 
 --------------------------------------------------------------------------------
--- @function [parent=#adv_spawning] quota_left
+-- @function [parent=#adv_spawning] time_over
+-- @param minimum minimal value required to be left
 -- @return true/false
 --------------------------------------------------------------------------------
-function adv_spawning.time_over()
+function adv_spawning.time_over(minimum)
 	assert(adv_spawning.quota_starttime ~= nil)
+--	if adv_spawning.quota_starttime == nil then
+--		return
+--	end
+
+	if minimum == nil then
+		minimum = 0
+	end
 
 	local now = adv_spawning.gettime()
 
@@ -208,14 +236,17 @@ function adv_spawning.time_over()
 
 	assert(time_passed >= 0)
 
-	return (adv_spawning.quota_left - time_passed) < 0
+	return (adv_spawning.quota_left - time_passed) < minimum
 end
 
 --------------------------------------------------------------------------------
 -- @function [parent=#adv_spawning] quota_leave
 --------------------------------------------------------------------------------
 function adv_spawning.quota_leave()
-	assert(adv_spawning.quota_starttime ~= nil)
+	--assert(adv_spawning.quota_starttime ~= nil)
+	if adv_spawning.quota_starttime == nil then
+		return
+	end
 
 	local now = adv_spawning.gettime()
 
@@ -232,23 +263,40 @@ end
 -- @function [parent=#adv_spawning] handlespawner
 -- @param spawnername unique name of spawner
 -- @param spawnerpos position of spawner
--- @return true/false
+-- @param minp (OPTIONAL) override spawner defaults
+-- @param maxp (OPTIONAL) override spawner defaults
+-- @return successfull true/false, permanent_error true,false
 --------------------------------------------------------------------------------
-function adv_spawning.handlespawner(spawnername,spawnerpos)
+function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp)
 
+	local permanent_error = false
 	local spawndef = adv_spawning.spawner_definitions[spawnername]
 
-	--get random pos
-	local new_pos = {}
-	new_pos.x = math.random(spawnerpos.x - adv_spawning.spawner_distance/2,
-							spawnerpos.x + adv_spawning.spawner_distance/2)
+	local max_x = spawnerpos.x + adv_spawning.spawner_distance/2
+	local min_x = spawnerpos.x - adv_spawning.spawner_distance/2
 
-	new_pos.z = math.random(spawnerpos.z - adv_spawning.spawner_distance/2,
-							spawnerpos.z + adv_spawning.spawner_distance/2)
+	local max_z = spawnerpos.z + adv_spawning.spawner_distance/2
+	local min_z = spawnerpos.z - adv_spawning.spawner_distance/2
 
 	local upper_y = spawnerpos.y + adv_spawning.spawner_distance/2
 	local lower_y = spawnerpos.y - adv_spawning.spawner_distance/2
 
+	if minp ~= nil then
+		min_x = minp.x
+		min_z = minp.z
+		lower_y = minp.y
+	end
+
+	if maxp ~= nil then
+		max_x = maxp.x
+		max_z = maxp.z
+		upper_y = maxp.y
+	end
+
+	--get random pos
+	local new_pos = {}
+	new_pos.x = math.random(min_x,max_x)
+	new_pos.z = math.random(min_z,max_z)
 
 	local continue = false
 
@@ -278,6 +326,31 @@ function adv_spawning.handlespawner(spawnername,spawnerpos)
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet absolute height check")
 		continue = true
+		permanent_error = true
+	end
+
+	--check surface
+	--NOTE needs to be done before collision box check as y pos may be modified there
+	if not continue and
+		not adv_spawning.check_surface(new_pos,
+										spawndef.surfaces,
+										spawndef.relative_height,
+										spawndef.spawn_inside) then
+		adv_spawning.log("info",
+			minetest.pos_to_string(new_pos) .. " didn't meet surface check")
+		continue = true
+	end
+
+	--flat area check
+	--NOTE needs to be done before collision box check as y pos may be modified there
+	if not continue and
+		not adv_spawning.check_flat_area(new_pos,
+								spawndef.flat_area,
+								spawndef.spawn_inside,
+								spawndef.surfaces) then
+		adv_spawning.log("info",
+			minetest.pos_to_string(new_pos) .. " didn't meet flat area check")
+		continue = true
 	end
 
 	--check collisionbox
@@ -293,17 +366,6 @@ function adv_spawning.handlespawner(spawnername,spawnerpos)
 		if not checkresult then
 			continue = true
 		end
-	end
-
-	--check surface
-	if not continue and
-		not adv_spawning.check_surface(new_pos,
-										spawndef.surfaces,
-										spawndef.relative_height,
-										spawndef.spawn_inside) then
-		adv_spawning.log("info",
-			minetest.pos_to_string(new_pos) .. " didn't meet surface check")
-		continue = true
 	end
 
 	--check entities around
@@ -374,7 +436,7 @@ function adv_spawning.handlespawner(spawnername,spawnerpos)
 		return true
 	end
 
-	return false
+	return false,permanent_error
 end
 
 --------------------------------------------------------------------------------
@@ -461,7 +523,7 @@ function adv_spawning.contains_pos(pos_list,pos,remove)
 			pos_list[i].y == pos.y then
 
 			if remove then
-				table.erase(i)
+				table.remove(pos_list,i)
 			end
 			return true
 	end
@@ -508,7 +570,7 @@ function adv_spawning.check_surface(pos,surfaces,relative_height,spawn_inside)
 	end
 
 	if relative_height == nil or (
-		relative_height.min <= 1 and
+		relative_height.max ~= nil and
 		relative_height.max <= 1) then
 
 		local lower_pos = {x=pos.x, y= pos.y-1, z=pos.z}
@@ -570,10 +632,12 @@ function adv_spawning.check_nodes_around(pos,nodes_around)
 
 			if nodes_around[i].type == "MIN" then
 				if found == nil then
+					print("not enough: " .. dump(nodes_around[i].name) .. " around")
 					return false
 				end
 			else
 				if found ~= nil then
+					print("to many: " .. dump(nodes_around[i].name) .. " around " .. dump(found))
 					return false
 				end
 			end
@@ -599,6 +663,8 @@ function adv_spawning.check_nodes_around(pos,nodes_around)
 			end
 		end
 	end
+
+	return true
 end
 
 --------------------------------------------------------------------------------
@@ -754,6 +820,72 @@ function adv_spawning.check_humidity_around(pos,humidity_around)
 	--TODO
 	return true
 end
+--------------------------------------------------------------------------------
+-- @function [parent=#adv_spawning] check_flat_area
+-- @param pos position to validate
+-- @param range to check for same height
+-- @param deviation maximum nmber of nodes not matching flat check
+-- @param spawn_inside nodes to spawn inside
+-- @return true/false
+--------------------------------------------------------------------------------
+function adv_spawning.check_flat_area(new_pos,flat_area,spawn_inside,surfaces)
+
+	if flat_area == nil then
+		return true
+	end
+
+	local range = flat_area.range
+
+	local back_left = {x=new_pos.x-range,y=new_pos.y-1,z=new_pos.z-range}
+	local front_right = { x=new_pos.x+range,y=new_pos.y-1,z=new_pos.z+range}
+
+	local current_deviation = 0
+
+	if flat_area.deviation ~= nil then
+		current_deviation = flat_area.deviation
+	end
+
+	local required_nodes = (range*2+1)*(range*2+1) - current_deviation
+
+	if surface == nil then
+		local ground_nodes =
+			minetest.find_nodes_in_area(back_left, front_right, spawn_inside)
+
+		if #ground_nodes > current_deviation then
+			adv_spawning.log("info","check_flat_area: " .. range .. " "
+				..dump(deviation).. " " .. #ground_nodes )
+			--adv_spawning.dump_area({x=back_left.x,y=new_pos.y-1,z=back_left.z},
+			--						front_right)
+			return false
+		end
+	else
+		local ground_nodes =
+			minetest.find_nodes_in_area(back_left, front_right, surfaces)
+
+		if #ground_nodes < required_nodes then
+			adv_spawning.log("info","check_flat_area: " .. range .. " " ..dump(deviation).. " " .. #ground_nodes )
+			--adv_spawning.dump_area({x=back_left.x,y=new_pos.y-1,z=back_left.z},
+			--						front_right)
+			return false
+		end
+	end
+
+	back_left.y = new_pos.y
+	front_right.y = new_pos.y
+
+	local inside_nodes =
+		minetest.find_nodes_in_area(back_left, front_right, spawn_inside)
+
+	if #inside_nodes < required_nodes then
+		adv_spawning.log("info","check_flat_area: " .. range .. " " .. dump(deviation) .. " "
+			.. #inside_nodes .. "/" .. required_nodes)
+		--adv_spawning.dump_area({x=back_left.x,y=new_pos.y-1,z=back_left.z},
+		--						front_right)
+		return false
+	end
+
+	return true
+end
 
 --------------------------------------------------------------------------------
 -- @function [parent=#adv_spawning] log
@@ -761,13 +893,12 @@ end
 -- @param text
 --------------------------------------------------------------------------------
 function adv_spawning.log(level,text)
-
 	local is_debug = false
 
 	if not is_debug then
 		return
 	end
-
+	print("ADV_SPAWNING:" .. text)
 	minetest.log(level,text)
 end
 
@@ -783,72 +914,172 @@ function adv_spawning.check_collisionbox(pos,collisionbox,spawn_inside)
 	end
 
 	--skip for collisionboxes smaller then a single node
-	if collisionbox[0] >= -0.5 and collisionbox[1] >= -0.5 and collisionbox[2] >= -0.5 and
-		collisionbox[3] <= 0.5 and collisionbox[4] <= 0.5 and collisionbox[5] <= 0.5 then
+	if collisionbox[1] >= -0.5 and collisionbox[2] >= -0.5 and collisionbox[3] >= -0.5 and
+		collisionbox[4] <= 0.5 and collisionbox[5] <= 0.5 and collisionbox[6] <= 0.5 then
 		return true,nil
 	end
 
 	--lets do the more complex checks
 	--first check if we need to move up
-	if collisionbox[1] < -0.5 then
-		pos.y = pos.y + (collisionbox[1]*-1) - 0.5
+	if collisionbox[2] < -0.5 then
+		pos.y = pos.y + (collisionbox[2]*-1) - 0.45
 	end
 
-	local corners = {}
+	local minp = {
+				x=pos.x+collisionbox[1],
+				y=pos.y+collisionbox[2],
+				z=pos.z+collisionbox[3]
+				}
+	local maxp = {
+				x=pos.x+collisionbox[4],
+				y=pos.y+collisionbox[5],
+				z=pos.z+collisionbox[6]
+				}
 
-	--centerpos
-	table.insert(corners, pos)
+	local lastpos = nil
 
-	--top_right_back
-	table.insert(corners,	{x=pos.x+collisionbox[3],
-							y=pos.y+collisionbox[4],
-							z=pos.z+collisionbox[2]})
+	for y=minp.y,maxp.y,1 do
+	for z=minp.z,maxp.z,1 do
+	for x=minp.x,maxp.x,1 do
+		local checkpos = {x=x,y=y,z=z}
 
-	--top_right_front
-	table.insert(corners,	{x=pos.x+collisionbox[3],
-							y=pos.y+collisionbox[4],
-							z=pos.z+collisionbox[5]})
-
-	--bottom_right_front
-	table.insert(corners,	{x=pos.x+collisionbox[3],
-							y=pos.y+collisionbox[1],
-							z=pos.z+collisionbox[5]})
-
-	--bottom_right_back
-	table.insert(corners,	{x=pos.x+collisionbox[3],
-							y=pos.y+collisionbox[1],
-							z=pos.z+collisionbox[2]})
-
-	--top_left_back
-	table.insert(corners,	{x=pos.x+collisionbox[0],
-							y=pos.y+collisionbox[4],
-							z=pos.z+collisionbox[2]})
-
-	--top_left_front
-	table.insert(corners,	{x=pos.x+collisionbox[0],
-							y=pos.y+collisionbox[4],
-							z=pos.z+collisionbox[5]})
-
-	--bottom_left_front
-	table.insert(corners,	{x=pos.x+collisionbox[0],
-							y=pos.y+collisionbox[1],
-							z=pos.z+collisionbox[5]})
-
-	--bottom_left_back
-	table.insert(corners,	{x=pos.x+collisionbox[0],
-							y=pos.y+collisionbox[1],
-							z=pos.z+collisionbox[2]})
-
-	local last_checked = nil
-	for i=0,#corners,1 do
-		if not adv_spawning.is_same_pos(#corners[i],last_checked) then
-			local node = minetest.get_node(#corners[i])
+		if adv_spawning.is_same_pos(checkpos,lastpos) then
+			local node = minetest.get_node(checkpos)
 
 			if not adv_spawning.contains(spawn_inside,node.name) then
+				adv_spawning.log("info","Failed collision box check: " ..
+						minetest.pos_to_string(pos) .. " "
+						.. dump(node.name) .. " at ".. minetest.pos_to_string(checkpos))
+				--adv_spawning.dump_area()
 				return false,nil
 			end
-			last_checked = #corners[i]
+
+			lastpos = checkpos
 		end
 	end
+	end
+	end
+
 	return true,pos.y
+end
+
+--------------------------------------------------------------------------------
+-- @function [parent=#adv_spawning] is_same_pos
+-- @param pos1 first for comparison
+-- @param pos2 second position for comparison
+--------------------------------------------------------------------------------
+function adv_spawning.is_same_pos(pos1,pos2)
+	if pos1 == nil or pos2 == nil then
+		return false
+	end
+
+	if pos1.x ~= pos2.x or
+		pos1.y ~= pos2.y or
+		pos1.z ~= pos2.z then
+		return false
+	end
+
+	return true
+end
+
+--------------------------------------------------------------------------------
+-- @function [parent=#adv_spawning] handle_mapgen_spawning
+--------------------------------------------------------------------------------
+function adv_spawning.handle_mapgen_spawning()
+	local continue = false
+	while(not continue and #adv_spawning.mapgen_jobqueue > 0) do
+		local toprocess = adv_spawning.mapgen_jobqueue[1]
+		table.remove(adv_spawning.mapgen_jobqueue,1)
+
+		--print("Processing job: " .. dump(toprocess) .. " no_quota: " ..
+		--			dump(adv_spawning.time_over(10)))
+
+		local tries = 0
+
+		while ( toprocess.retries > 0 and
+				toprocess.spawntotal > 0 and
+				tries < adv_spawning.max_mapgen_tries_per_step and
+				(not adv_spawning.time_over(10)) )do
+
+			local retval,permanent_error = adv_spawning.handlespawner(toprocess.spawner,
+											{x=0,y=0,z=0},
+											toprocess.minp,
+											toprocess.maxp)
+			if retval then
+				toprocess.spawntotal = toprocess.spawntotal -1
+			end
+
+			if permanent_error then
+				toprocess.retries = 0
+			end
+
+			toprocess.retries = toprocess.retries -1
+			tries = tries +1
+		end
+
+		if toprocess.retries > 0 then
+			if toprocess.spawntotal > 0 then
+				table.insert(adv_spawning.mapgen_jobqueue,toprocess)
+			end
+			continue = true
+		end
+	end
+end
+
+--------------------------------------------------------------------------------
+-- @function [parent=#adv_spawning] queue_mapgen_jobs
+-- @param minp
+-- @param maxp
+--------------------------------------------------------------------------------
+function adv_spawning.queue_mapgen_jobs(minp,maxp)
+	for key,value in pairs(adv_spawning.spawner_definitions) do
+		local continue = false
+
+		--check if cyclic spawning is enabled
+		if not continue and
+			(value.mapgen == nil or
+			value.mapgen.enabled == false) then
+			continue = true
+		end
+
+
+		if not continue then
+			table.insert(adv_spawning.mapgen_jobqueue,
+				{
+					minp = minp,
+					maxp = maxp,
+					spawner = key,
+					retries = value.mapgen.retries,
+					spawntotal = value.mapgen.spawntotal
+				})
+		end
+	end
+end
+
+--------------------------------------------------------------------------------
+-- @function [parent=#adv_spawning] dump_area
+-- @param minp
+-- @param maxp
+--------------------------------------------------------------------------------
+function adv_spawning.dump_area(minp,maxp)
+	print("Dumping: " .. dump(minp) .. "<-->" .. dump(maxp))
+	for y=minp.y,maxp.y,1 do
+	print("--- ypos: " .. y .. " --------------------------------------------------------------")
+	for z=minp.z,maxp.z,1 do
+	local line = ""
+	for x=minp.x,maxp.x,1 do
+		local node = minetest.get_node({x=x,y=y,z=z})
+
+		local toprint = node.name
+
+		if toprint:find(":") ~= nil then
+			toprint = toprint:sub(toprint:find(":")+1)
+		end
+
+		line = line .. string.format(" %15s |",toprint)
+	end
+		print(line)
+	end
+	print("")
+	end
 end

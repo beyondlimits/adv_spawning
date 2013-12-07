@@ -18,6 +18,7 @@ function adv_spawning.register(spawner_name,spawning_def)
 		--TODO validate spawning definition
 
 		adv_spawning.spawner_definitions[spawner_name] = spawning_def
+		print("ADV_SPAWNING: registering spawner \"" .. spawner_name .. "\"")
 		return true
 	else
 		return false

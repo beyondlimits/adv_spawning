@@ -185,15 +185,24 @@ function adv_spawning.seed_scan_for_applyable_spawners(self)
 	for key,value in pairs(adv_spawning.spawner_definitions) do
 		local continue = false
 
+		--check if cyclic spawning is enabled
+		if not continue and
+			value.cyclic_spawning ~= nil and
+			value.cyclic_spawning == false then
+			continue = true
+		end
+
 		--if spawner is far away from spawn area don't even try to spawn
 		if not continue and
 			value.absolute_height ~= nil then
-			if value.absolute_height.min
+			if value.absolute_height.min ~= nil and
+				value.absolute_height.min
 				> pos.y + (adv_spawning.spawner_distance/2) then
 				continue = true
 			end
 
-			if value.absolute_height.max
+			if value.absolute_height.max ~= nil
+				and value.absolute_height.max
 				< pos.y - (adv_spawning.spawner_distance/2) then
 				continue = true
 			end

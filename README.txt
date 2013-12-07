@@ -1,6 +1,6 @@
 ********************************************************************************
 *                                                                              *
-*              Advanced spawning mod (adv_spawning) 0.0.0                      *
+*              Advanced spawning mod (adv_spawning) 0.0.2                      *
 *                                                                              *
 *     URL: http://github.com/sapier/adv_spawning                               *
 *     Author: sapier                                                           *
@@ -14,8 +14,8 @@ Advances spawning mod is designed to provide a feature rich yet easy to use
 spawner for entites. It's purpose is to support spawning within large numbers
 of different environments. While adv_spawning supports a wide configurable range
 of spawning situations, it's performance impact is clamped at minimal level.
-To achiev this performance goal adv_spawning is intended for low frequency
-entity spawning only. Tyyical spawn rate will be a low single digit count of
+To achieve this performance goal adv_spawning is intended for low frequency
+entity spawning only. Typical spawn rate will be a low single digit count of
 entities per second throughout whole world.
 
 
@@ -31,7 +31,7 @@ adv_spawning.statistics() --> statistics data about spawning
 Spawning definition:
 --------------------
 {
-	spawnee = "some_mod:entity_name", -- name of entity to spawn OR function to be called
+	spawnee = "some_mod:entity_name", -- name of entity to spawn OR function to be called e.g. func(pos)
 	absolute_height =     -- absolute y value to check
 	{
 		min = 1,          -- minimum height to spawn at
@@ -66,26 +66,41 @@ Spawning definition:
 		light_around_def_1,
 		light_around_def_2,
 		...
-	}
+	},
 
 	humidity_around =     -- list of humidity around definitions
 	{
 		humidity_around_def_1,
 		humidity_around_def_2,
 		...
-	}
+	},
 
 	temperature_around =  -- list of temperature around definitions
 	{
 		temperature_around_def_1,
 		temperature_around_def_2,
 		...
-	}
+	},
 
-	collisionbox = {},    -- collisionbox of entity to spawn (usually same as used for entiy itself)
-	spawn_interval = 200,  -- [MANDATORY] interval to try to spawn a entity
-	custom_check = fct(pos) -- a custom check to be called return true for pass, false for not pass
+	mapgen =                 -- configuration for initial mapgen spawning
+	{
+		enabled = true,      -- mapgen spawning enabled or not
+		retries = 5,         -- number of tries to spawn a entity prior giving up
+		spawntotal = 3,      -- number of entities to try on mapgen
+	},
 
+
+	flat_area =              -- check for amount of flat area around,
+							 -- (only usefull for ground bound mobs)
+	{
+		range = 3,           -- range to be checked for flattness
+		deviation = 2,       -- maximum number of nodes not matching flat check
+	},
+
+	collisionbox = {},       -- collisionbox of entity to spawn (usually same as used for entiy itself)
+	spawn_interval = 200,    -- [MANDATORY] interval to try to spawn a entity
+	custom_check = fct(pos), -- a custom check to be called return true for pass, false for not pass
+	cyclic_spawning = true   -- spawn per spawner step (defaults to true)
 }
 
 Light around definition:

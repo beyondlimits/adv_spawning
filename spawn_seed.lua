@@ -46,28 +46,38 @@ function adv_spawning.seed_step(self,dtime)
 			local rand_spawner = math.random(1,#self.pending_spawners)
 			local key = self.pending_spawners[rand_spawner]
 
+			local tries = 1
 
-			if adv_spawning.handlespawner(key,self.object:getpos()) then
-				self.spawning_data[key] =
-					adv_spawning.spawner_definitions[key].spawn_interval
-			else
-				self.spawning_data[key] =
-					adv_spawning.spawner_definitions[key].spawn_interval/4
+			if adv_spawning.spawner_definitions[key].spawns_per_interval ~= nil then
+				tries = adv_spawning.spawner_definitions[key].spawns_per_interval
 			end
 
-			--check quota again
-			adv_spawning.quota_leave()
-			if not adv_spawning.quota_enter() then
-				return
+			while tries > 0 do
+
+				if adv_spawning.handlespawner(key,self.object:getpos()) then
+					self.spawning_data[key] =
+						adv_spawning.spawner_definitions[key].spawn_interval
+				else
+					self.spawning_data[key] =
+						adv_spawning.spawner_definitions[key].spawn_interval/4
+				end
+
+				--check quota again
+				adv_spawning.quota_leave()
+				if not adv_spawning.quota_enter() then
+					return
+				end
+
+				tries = tries -1
 			end
 
 			table.remove(self.pending_spawners,rand_spawner)
 			per_step_count = per_step_count +1
 		end
 
-		if (#self.pending_spawners > 0) then
-			print("Handled " .. per_step_count .. " spawners, spawners left: " .. #self.pending_spawners)
-		end
+--		if (#self.pending_spawners > 0) then
+--			print("Handled " .. per_step_count .. " spawners, spawners left: " .. #self.pending_spawners)
+--		end
 		adv_spawning.quota_leave()
 	end
 end
@@ -221,7 +231,7 @@ function adv_spawning.seed_scan_for_applyable_spawners(self)
 		end
 
 		if not continue then
-			self.spawning_data[key] = value.spawn_interval
+			self.spawning_data[key] = value.spawn_interval * math.random()
 		else
 			self.spawning_data[key] = nil
 		end

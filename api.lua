@@ -15,7 +15,14 @@
 function adv_spawning.register(spawner_name,spawning_def)
 	if adv_spawning.spawner_definitions[spawner_name] == nil then
 
-		--TODO validate spawning definition
+
+		if not adv_spawning.verify_check_entities_around(spawning_def.entities_around) then
+			return false
+		end
+
+		if not adv_spawning.verify_check_nodes_around(spawning_def.nodes_around) then
+			return false
+		end
 
 		adv_spawning.spawner_definitions[spawner_name] = spawning_def
 		print("ADV_SPAWNING: registering spawner \"" .. spawner_name .. "\"")

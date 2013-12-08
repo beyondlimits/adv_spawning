@@ -97,8 +97,16 @@ Spawning definition:
 		deviation = 2,       -- maximum number of nodes not matching flat check
 	},
 
+	daytimes =               -- do only spawn within these daytimes
+	{
+		daytime_def_1,
+		daytime_def_2,
+		...
+	}
+
 	collisionbox = {},       -- collisionbox of entity to spawn (usually same as used for entiy itself)
 	spawn_interval = 200,    -- [MANDATORY] interval to try to spawn a entity
+	spawns_per_interval = 1, -- try to spawn multiple mobs (if time available)
 	custom_check = fct(pos), -- a custom check to be called return true for pass, false for not pass
 	cyclic_spawning = true   -- spawn per spawner step (defaults to true)
 }
@@ -150,6 +158,12 @@ spawn_inside definition (list of nodenames):
 	"air",
 	"default:water_source",
 	"default:water_flowing"
+}
+
+Daytime definition:
+{
+	begin = 0.0,               --minimum daytime
+	stop  = 0.25,              --maximum daytime
 }
 
 Statistics:

@@ -15,6 +15,12 @@
 -- @return maximum of a and b
 --------------------------------------------------------------------------------
 function MAX(a,b)
+	if a == nil then
+		return b
+	end
+	if b == nil then
+		return a
+	end
 	if a > b then
 		return a
 	else
@@ -29,6 +35,12 @@ end
 -- @return minimum of a and b
 --------------------------------------------------------------------------------
 function MIN(a,b)
+	if a == nil then
+		return b
+	end
+	if b == nil then
+		return a
+	end
 	if a > b then
 		return b
 	else
@@ -272,6 +284,11 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp)
 	local permanent_error = false
 	local spawndef = adv_spawning.spawner_definitions[spawnername]
 
+	if not adv_spawning.check_daytime(spawndef.daytimes) then
+		adv_spawning.log("info","didn't meet daytime check")
+		return false,nil
+	end
+
 	local max_x = spawnerpos.x + adv_spawning.spawner_distance/2
 	local min_x = spawnerpos.x - adv_spawning.spawner_distance/2
 
@@ -298,7 +315,7 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp)
 	new_pos.x = math.random(min_x,max_x)
 	new_pos.z = math.random(min_z,max_z)
 
-	local continue = false
+
 
 	--check if entity is configured to spawn at surface
 	if spawndef.relative_height == nil or
@@ -308,7 +325,9 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp)
 							spawndef.spawn_inside)
 	else
 		new_pos.y = adv_spawning.get_relative_pos(lower_y,upper_y,new_pos,
-							spawndef.spawn_inside,spawndef.relative_height)
+							spawndef.spawn_inside,
+							spawndef.relative_height,
+							spawndef.absolute_height)
 	end
 
 	--check if we did found a position within relative range
@@ -317,126 +336,112 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp)
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't find a suitable y pos "
 			.. lower_y .. "<-->" .. upper_y )
-		continue = true
+		return false,nil
 	end
 
 	--check absolute height
-	if not continue and
-		not adv_spawning.check_absolute_height(new_pos,spawndef.absolute_height) then
+	if not adv_spawning.check_absolute_height(new_pos,spawndef.absolute_height) then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet absolute height check")
-		continue = true
-		permanent_error = true
+		return false,true
 	end
 
 	--check surface
 	--NOTE needs to be done before collision box check as y pos may be modified there
-	if not continue and
-		not adv_spawning.check_surface(new_pos,
+	if not adv_spawning.check_surface(new_pos,
 										spawndef.surfaces,
 										spawndef.relative_height,
 										spawndef.spawn_inside) then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet surface check")
-		continue = true
+		return false,nil
 	end
 
 	--flat area check
 	--NOTE needs to be done before collision box check as y pos may be modified there
-	if not continue and
-		not adv_spawning.check_flat_area(new_pos,
+	if not adv_spawning.check_flat_area(new_pos,
 								spawndef.flat_area,
 								spawndef.spawn_inside,
 								spawndef.surfaces) then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet flat area check")
-		continue = true
+		return false,nil
 	end
 
 	--check collisionbox
-	if not continue then
-		local checkresult,y_pos =
-			adv_spawning.check_collisionbox(new_pos,
-							spawndef.collisionbox,spawndef.spawn_inside)
+	local checkresult,y_pos =
+		adv_spawning.check_collisionbox(new_pos,
+						spawndef.collisionbox,spawndef.spawn_inside)
 
-		if checkresult and y_pos ~= nil then
-			new_pos.y = y_pos
-		end
+	if checkresult and y_pos ~= nil then
+		new_pos.y = y_pos
+	end
 
-		if not checkresult then
-			continue = true
-		end
+	if not checkresult then
+		adv_spawning.log("info",
+			minetest.pos_to_string(new_pos) .. " didn't meet collisionbox check")
+		return false,nil
 	end
 
 	--check entities around
-	if not continue and
-		not adv_spawning.check_entities_around(new_pos,spawndef.entities_around) then
+	if not adv_spawning.check_entities_around(new_pos,spawndef.entities_around) then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet entities check")
-		continue = true
+		return false,nil
 	end
 
 	--check nodes around
-	if not continue and
-		not adv_spawning.check_nodes_around(new_pos,spawndef.nodes_around) then
+	if not adv_spawning.check_nodes_around(new_pos,spawndef.nodes_around) then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet nodes check")
-		continue = true
+		return false,nil
 	end
 
 	--check light around
-	if not continue and
-		not adv_spawning.check_light_around(new_pos,spawndef.light_around) then
+	if not adv_spawning.check_light_around(new_pos,spawndef.light_around) then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet light  check")
-		continue = true
+		return false,nil
 	end
 
 	--check humidity
-	if not continue and
-		not adv_spawning.check_humidity_around(new_pos,spawndef.humidity_around) then
+	if not adv_spawning.check_humidity_around(new_pos,spawndef.humidity_around) then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet humidity check")
-		continue = true
+		return false,nil
 	end
 
 	--check temperature
-	if not continue and
-		not adv_spawning.check_temperature_around(new_pos,spawndef.temperature_around) then
+	if not adv_spawning.check_temperature_around(new_pos,spawndef.temperature_around) then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet temperature check")
-		continue = true
+		return false,nil
 	end
 
 	--custom check
-	if not continue and
-		(spawndef.custom_check ~= nil and
+	if (spawndef.custom_check ~= nil and
 		type(spawndef.custom_check) == "function") then
 
 		if not spawndef.custom_check(new_pos) then
 			adv_spawning.log("info",
 				minetest.pos_to_string(new_pos) .. " didn't meet custom check")
-			continue = true
+			return false,nil
 		end
 	end
 
 	--do spawn
-	if not continue then
-		print("Now spawning: " .. spawndef.spawnee .. " at " ..
-			minetest.pos_to_string(new_pos))
+	--print("Now spawning: " .. spawndef.spawnee .. " at " ..
+	--	minetest.pos_to_string(new_pos))
 
-		if type(spawndef.spawnee) == "function" then
-			spawndef.spawnee(new_pos)
-		else
-			minetest.add_entity(new_pos,spawndef.spawnee)
-		end
-
-		adv_spawning.statistics.session.entities_created =
-				adv_spawning.statistics.session.entities_created +1
-		return true
+	if type(spawndef.spawnee) == "function" then
+		spawndef.spawnee(new_pos)
+	else
+		minetest.add_entity(new_pos,spawndef.spawnee)
 	end
 
-	return false,permanent_error
+	adv_spawning.statistics.session.entities_created =
+			adv_spawning.statistics.session.entities_created +1
+	return true
 end
 
 --------------------------------------------------------------------------------
@@ -455,14 +460,23 @@ function adv_spawning.get_surface(y_min,y_max,new_pos,spawn_inside)
 	local spawnable_nodes =
 		minetest.find_nodes_in_area(bottom_pos, top_pos, spawn_inside)
 
+	if #spawnable_nodes == 0 then
+		return nil
+	end
+
+	local spawnable_node_passed = false
+
 	for i=y_max, y_min, -1 do
 		local pos = { x=new_pos.x,z=new_pos.z,y=i}
 		if not adv_spawning.contains_pos(spawnable_nodes,pos) then
 			local node = minetest.get_node(pos)
 
-			if node.name ~= "ignore" then
+			if node.name ~= "ignore" and
+				spawnable_node_passed then
 				return i+1
 			end
+		else
+			spawnable_node_passed = true
 		end
 	end
 
@@ -476,13 +490,19 @@ end
 -- @param new_pos position to spawn at
 -- @param spawn_inside nodes to spawn at
 -- @param relative_height
+-- @param absolute_height
 -- @return y-value of last spawnable node
 --------------------------------------------------------------------------------
-function adv_spawning.get_relative_pos(y_min,y_max,new_pos,spawn_inside,relative_height)
+function adv_spawning.get_relative_pos(y_min,y_max,new_pos,spawn_inside,relative_height,absolute_height)
 	local y_val = adv_spawning.get_surface(y_min,y_max,new_pos,spawn_inside)
 
 	if y_val == nil then
-		return nil
+		if (relative_height.min ~= nil or
+			relative_height.max ~= nil) then
+			return nil
+		else
+			y_val = y_min
+		end
 	end
 
 	local top_pos = { x=new_pos.x, z=new_pos.z, y=y_max}
@@ -498,12 +518,21 @@ function adv_spawning.get_relative_pos(y_min,y_max,new_pos,spawn_inside,relative
 		end
 	end
 
+	top_pos.y = MIN(absolute_height.max,top_pos.y)
+	bottom_pos.y = MAX(absolute_height.min,bottom_pos.y)
+
+	if top_pos.y < bottom_pos.y then
+		--print("Invalid interval: " .. bottom_pos.y .. "<-->" .. top_pos.y)
+		return nil
+	end
+
 	local spawnable_nodes =
 		minetest.find_nodes_in_area(bottom_pos, top_pos, spawn_inside)
 
 	if #spawnable_nodes > 0 then
 		return spawnable_nodes[math.random(1,#spawnable_nodes)].y
 	else
+		--print("no suitable nodes" .. bottom_pos.y .. "<-->" .. top_pos.y)
 		return nil
 	end
 end
@@ -610,6 +639,46 @@ function adv_spawning.contains(table_to_check,value)
 end
 
 --------------------------------------------------------------------------------
+-- @function [parent=#adv_spawning] check_daytimes
+-- @param table_to_check
+-- @return true/false
+--------------------------------------------------------------------------------
+function adv_spawning.check_daytime(daytimedefs)
+	if daytimedefs == nil then
+		return true
+	end
+
+	local current_time = minetest.get_timeofday()
+	local match = false
+
+	for i=1,#daytimedefs,1 do
+		if daytimedefs[i].begin ~= nil and
+			daytimedefs[i].stop ~= nil then
+
+			if current_time < daytimedefs[i].stop and
+				current_time > daytimedefs[i].begin then
+				match = true
+				break
+			end
+		end
+
+		if daytimedefs[i].begin ~= nil and
+			current_time > daytimedefs[i].begin then
+			match = true
+			break
+		end
+
+		if daytimedefs[i].stop ~= nil and
+			current_time < daytimedefs[i].stop then
+			match = true
+			break
+		end
+	end
+
+	return match
+end
+
+--------------------------------------------------------------------------------
 -- @function [parent=#adv_spawning] check_nodes_around
 -- @param pos position to validate
 -- @param nodes_around node around definitions
@@ -632,12 +701,12 @@ function adv_spawning.check_nodes_around(pos,nodes_around)
 
 			if nodes_around[i].type == "MIN" then
 				if found == nil then
-					print("not enough: " .. dump(nodes_around[i].name) .. " around")
+					--print("not enough: " .. dump(nodes_around[i].name) .. " around")
 					return false
 				end
 			else
 				if found ~= nil then
-					print("to many: " .. dump(nodes_around[i].name) .. " around " .. dump(found))
+					--print("to many: " .. dump(nodes_around[i].name) .. " around " .. dump(found))
 					return false
 				end
 			end
@@ -654,11 +723,16 @@ function adv_spawning.check_nodes_around(pos,nodes_around)
 
 			if nodes_around[i].type == "MIN" and
 				#found_nodes < nodes_around[i].threshold then
+				--print("Found MIN: " .. dump(nodes_around[i].name) ..
+				--	"\n at locations: " .. dump(found_nodes))
+				--print ("Only " .. #found_nodes .. "/" .. nodes_around[i].threshold)
 				return false
 			end
 
 			if nodes_around[i].type == "MAX" and
 				#found_nodes > nodes_around[i].threshold then
+				--print("Found MAX: " .. dump(nodes_around[i].name) ..
+				--	"\n at locations: " .. dump(found_nodes))
 				return false
 			end
 		end
@@ -681,7 +755,6 @@ function adv_spawning.check_entities_around(pos,entities_around)
 	for i=1,#entities_around,1 do
 		local entity_in_range =
 			minetest.get_objects_inside_radius(pos, entities_around[i].distance)
-
 
 		if entities_around[i].entityname == nil then
 			if entities_around[i].type == "MIN" and
@@ -942,8 +1015,7 @@ function adv_spawning.check_collisionbox(pos,collisionbox,spawn_inside)
 	for z=minp.z,maxp.z,1 do
 	for x=minp.x,maxp.x,1 do
 		local checkpos = {x=x,y=y,z=z}
-
-		if adv_spawning.is_same_pos(checkpos,lastpos) then
+		if not adv_spawning.is_same_pos(checkpos,lastpos) then
 			local node = minetest.get_node(checkpos)
 
 			if not adv_spawning.contains(spawn_inside,node.name) then

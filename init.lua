@@ -8,7 +8,7 @@
 --
 -------------------------------------------------------------------------------
 
-local version = "0.0.3"
+local version = "0.0.4"
 
 if adv_spawning ~= nil then
 	minetest.log("error","MOD: adv_spawning requires adv_spawning variable to be available")

@@ -39,3 +39,12 @@ end
 function adv_spawning.get_statistics()
 	return minetest.deserialize(minetest.serialize(adv_spawning.statistics))
 end
+
+
+--------------------------------------------------------------------------------
+-- @function [parent=#adv_spawning] get_spawner_density
+-- @return get snapshot of statistics
+--------------------------------------------------------------------------------
+function adv_spawning.get_spawner_density()
+	return adv_spawning.spawner_distance,adv_spawning.spawner_y_offset
+end

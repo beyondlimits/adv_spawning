@@ -1,6 +1,6 @@
 ********************************************************************************
 *                                                                              *
-*              Advanced spawning mod (adv_spawning) 0.0.2                      *
+*              Advanced spawning mod (adv_spawning) 0.0.4                      *
 *                                                                              *
 *     URL: http://github.com/sapier/adv_spawning                               *
 *     Author: sapier                                                           *
@@ -107,7 +107,7 @@ Spawning definition:
 	collisionbox = {},       -- collisionbox of entity to spawn (usually same as used for entiy itself)
 	spawn_interval = 200,    -- [MANDATORY] interval to try to spawn a entity
 	spawns_per_interval = 1, -- try to spawn multiple mobs (if time available)
-	custom_check = fct(pos), -- a custom check to be called return true for pass, false for not pass
+	custom_check = fct(pos,spawndef), -- a custom check to be called return true for pass, false for not pass
 	cyclic_spawning = true   -- spawn per spawner step (defaults to true)
 }
 

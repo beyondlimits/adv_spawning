@@ -9,12 +9,12 @@
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
--- @function MAX
+-- @function [parent=#adv_spawning] MAX
 -- @param a first value to compare
 -- @param b second value to compare
 -- @return maximum of a and b
 --------------------------------------------------------------------------------
-function MAX(a,b)
+function adv_spawning.MAX(a,b)
 	if a == nil then
 		return b
 	end
@@ -29,12 +29,12 @@ function MAX(a,b)
 end
 
 --------------------------------------------------------------------------------
--- @function MIN
+-- @function [parent=#adv_spawning] MIN
 -- @param a first value to compare
 -- @param b second value to compare
 -- @return minimum of a and b
 --------------------------------------------------------------------------------
-function MIN(a,b)
+function adv_spawning.MIN(a,b)
 	if a == nil then
 		return b
 	end
@@ -60,8 +60,11 @@ function adv_spawning.initialize()
 	adv_spawning.quota_left = adv_spawning.quota_reload
 	adv_spawning.max_spawns_per_spawner = 2
 	adv_spawning.spawner_distance = 70
+	adv_spawning.spawner_y_offset = 20
 	adv_spawning.max_spawning_frequency_hz = 5
 	adv_spawning.max_mapgen_tries_per_step = 3
+
+	adv_spawning.active_range = minetest.setting_get("active_block_range") * 16
 
 	adv_spawning.spawner_definitions = {}
 	adv_spawning.mapgen_jobqueue = {}
@@ -131,7 +134,8 @@ function adv_spawning.mapgen_hook(minp,maxp,blockseed)
 			* adv_spawning.spawner_distance
 		local start_y =
 			(math.floor(minp.y/adv_spawning.spawner_distance)
-				* adv_spawning.spawner_distance) +20
+				* adv_spawning.spawner_distance)
+				+ adv_spawning.spawner_y_offset
 		local start_z =
 			math.floor(minp.z/adv_spawning.spawner_distance)
 			* adv_spawning.spawner_distance
@@ -169,12 +173,12 @@ end
 function adv_spawning.global_onstep(dtime)
 
 	adv_spawning.statistics.step.last =
-		adv_spawning.quota_reload - adv_spawning.quota_left
+		math.floor(adv_spawning.quota_reload - adv_spawning.quota_left + 0.5)
 
-	adv_spawning.statistics.step.max = MAX(adv_spawning.statistics.step.last,
+	adv_spawning.statistics.step.max = adv_spawning.MAX(adv_spawning.statistics.step.last,
 											adv_spawning.statistics.step.max)
 
-	adv_spawning.statistics.step.min = MIN(adv_spawning.statistics.step.last,
+	adv_spawning.statistics.step.min = adv_spawning.MIN(adv_spawning.statistics.step.last,
 											adv_spawning.statistics.step.min)
 
 	adv_spawning.statistics.session.steps =
@@ -183,10 +187,10 @@ function adv_spawning.global_onstep(dtime)
 	adv_spawning.statistics.load.cur =
 		adv_spawning.statistics.step.last/(dtime*1000)
 
-	adv_spawning.statistics.load.max = MAX(adv_spawning.statistics.load.cur,
+	adv_spawning.statistics.load.max = adv_spawning.MAX(adv_spawning.statistics.load.cur,
 											adv_spawning.statistics.load.max)
 
-	adv_spawning.statistics.load.min = MIN(adv_spawning.statistics.load.cur,
+	adv_spawning.statistics.load.min = adv_spawning.MIN(adv_spawning.statistics.load.cur,
 											adv_spawning.statistics.load.min)
 
 	adv_spawning.statistics.load.avg =
@@ -195,7 +199,9 @@ function adv_spawning.global_onstep(dtime)
 			adv_spawning.statistics.load.cur) /
 			adv_spawning.statistics.session.steps
 
-	adv_spawning.quota_left = adv_spawning.quota_reload
+	--reduce following quota by overtime from last step
+	adv_spawning.quota_left =
+		adv_spawning.MAX(0,adv_spawning.quota_left+adv_spawning.quota_reload)
 
 	if adv_spawning.quota_enter() then
 		adv_spawning.handle_mapgen_spawning()
@@ -213,10 +219,15 @@ function adv_spawning.quota_enter(force)
 	--assert(adv_spawning.quota_starttime == nil)
 
 	if adv_spawning.quota_left <= 0 then
-		print("Quota: no time left: " .. adv_spawning.quota_left)
 		if force == true then
-			print("Quota: task is too important to skip do it anyway")
+			print("Quota: task is too important to skip do it anyway," ..
+				" quota already passed by: " ..
+				string.format("%.2f ms",adv_spawning.quota_left))
 		else
+			if adv_spawning.quota_left * -2 > adv_spawning.quota_reload then
+				print("Quota: no time left: " ..
+					string.format("%.2f ms",adv_spawning.quota_left))
+			end
 			return false
 		end
 	end
@@ -277,9 +288,10 @@ end
 -- @param spawnerpos position of spawner
 -- @param minp (OPTIONAL) override spawner defaults
 -- @param maxp (OPTIONAL) override spawner defaults
+-- @param ignore_active_area set to true for mapgen spawning
 -- @return successfull true/false, permanent_error true,false
 --------------------------------------------------------------------------------
-function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp)
+function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp,ignore_active_area)
 
 	local permanent_error = false
 	local spawndef = adv_spawning.spawner_definitions[spawnername]
@@ -312,9 +324,9 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp)
 
 	--get random pos
 	local new_pos = {}
+
 	new_pos.x = math.random(min_x,max_x)
 	new_pos.z = math.random(min_z,max_z)
-
 
 
 	--check if entity is configured to spawn at surface
@@ -344,6 +356,13 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp)
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet absolute height check")
 		return false,true
+	end
+
+	--check active area
+	if not ignore_active_area and not adv_spawning.check_active_block(new_pos) then
+		adv_spawning.log("info",
+			minetest.pos_to_string(new_pos) .. " didn't meet active area check")
+		return false,nil
 	end
 
 	--check surface
@@ -404,6 +423,14 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp)
 		return false,nil
 	end
 
+--  ONLY use this if you have luajit
+--	--check light around
+--	if not adv_spawning.check_light_around_voxel(new_pos,spawndef.light_around) then
+--		adv_spawning.log("info",
+--			minetest.pos_to_string(new_pos) .. " didn't meet light  check")
+--		return false,nil
+--	end
+
 	--check humidity
 	if not adv_spawning.check_humidity_around(new_pos,spawndef.humidity_around) then
 		adv_spawning.log("info",
@@ -422,7 +449,7 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp)
 	if (spawndef.custom_check ~= nil and
 		type(spawndef.custom_check) == "function") then
 
-		if not spawndef.custom_check(new_pos) then
+		if not spawndef.custom_check(new_pos,spawndef) then
 			adv_spawning.log("info",
 				minetest.pos_to_string(new_pos) .. " didn't meet custom check")
 			return false,nil
@@ -518,8 +545,8 @@ function adv_spawning.get_relative_pos(y_min,y_max,new_pos,spawn_inside,relative
 		end
 	end
 
-	top_pos.y = MIN(absolute_height.max,top_pos.y)
-	bottom_pos.y = MAX(absolute_height.min,bottom_pos.y)
+	top_pos.y = adv_spawning.MIN(absolute_height.max,top_pos.y)
+	bottom_pos.y = adv_spawning.MAX(absolute_height.min,bottom_pos.y)
 
 	if top_pos.y < bottom_pos.y then
 		--print("Invalid interval: " .. bottom_pos.y .. "<-->" .. top_pos.y)
@@ -658,8 +685,8 @@ function adv_spawning.check_daytime(daytimedefs)
 			if current_time < daytimedefs[i].stop and
 				current_time > daytimedefs[i].begin then
 				match = true
-				break
 			end
+			break
 		end
 
 		if daytimedefs[i].begin ~= nil and
@@ -824,8 +851,8 @@ function adv_spawning.check_light_around(pos,light_around)
 			if light_around[i].type == "OVERALL_MIN" or
 				light_around[i].type == "OVERALL_MAX" then
 
-				for i=0,24000,1000 do
-					local light_level = minetest.get_node_light(checkpos, i)
+				for j=0,24000,1000 do
+					local light_level = minetest.get_node_light(checkpos, j)
 
 					if light_level ~= nil then
 						if light_around[i].type == "OVERALL_MAX" and
@@ -863,6 +890,198 @@ function adv_spawning.check_light_around(pos,light_around)
 	end
 
 	return true
+end
+
+--------------------------------------------------------------------------------
+-- @function [parent=#adv_spawning] check_light_around_voxel
+-- @param pos position to validate
+-- @param light_around light around definitions
+-- @return true/false
+--------------------------------------------------------------------------------
+function adv_spawning.check_light_around_voxel(pos,light_around)
+	if light_around == nil then
+		return true
+	end
+
+	local maxdistance = 0
+
+	for i=1,#light_around,1 do
+		maxdistance = adv_spawning.MAX(maxdistance,light_around[i].distance)
+	end
+
+	-- voxelmanip is of no use for low counts of nodes
+	if maxdistance <=10 then
+		return adv_spawning.check_light_around(pos,light_around)
+	end
+
+	local minp = { x=math.floor(pos.x - maxdistance),
+					y=math.floor(pos.y - maxdistance),
+					z=math.floor(pos.z - maxdistance)}
+	local maxp = { x=math.ceil(pos.x + maxdistance),
+					y=math.ceil(pos.y + maxdistance),
+					z=math.ceil(pos.z + maxdistance)}
+
+	local voxeldata = minetest.get_voxel_manip()
+	local got_minp,got_maxp = voxeldata:read_from_map(minp,maxp)
+
+	local voxel_light_data = voxeldata:get_light_data()
+	local node_data = voxeldata:get_data()
+	local voxelhelper = VoxelArea:new({MinEdge=got_minp,MaxEdge=got_maxp})
+
+
+	for i=1,#light_around,1 do
+
+		for x=pos.x-light_around[i].distance,pos.x+light_around[i].distance,1 do
+		for y=pos.y-light_around[i].distance,pos.y+light_around[i].distance,1 do
+		for z=pos.z-light_around[i].distance,pos.z+light_around[i].distance,1 do
+			local checkpos = { x=x,y=y,z=z}
+			local time = minetest.get_timeofday()
+			if light_around[i].type == "TIMED_MIN" or
+				light_around[i].type == "TIMED_MAX" then
+				time = light_around[i].time
+			end
+
+			if light_around[i].type == "OVERALL_MIN" or
+				light_around[i].type == "OVERALL_MAX" then
+
+				for j=0,24000,1000 do
+					local light_level =
+						adv_spawning.voxelmaniplight(node_data,
+														voxel_light_data,
+														voxelhelper,
+														checkpos,j)
+
+					if light_level ~= nil then
+						if light_around[i].type == "OVERALL_MAX" and
+							light_level > light_around[i].threshold then
+							return false
+						end
+
+						if light_around[i].type == "OVERALL_MIN" and
+							light_level < light_around[i].threshold then
+							return false
+						end
+					end
+				end
+
+			else
+				local light_level =
+						adv_spawning.voxelmaniplight(node_data,
+														voxel_light_data,
+														voxelhelper,
+														checkpos,time)
+
+				if light_level ~= nil then
+					if (light_around[i].type == "TIMED_MIN" or
+						light_around[i].type == "CURRENT_MIN") and
+						light_level < light_around[i].threshold then
+							return false
+					end
+
+					if (light_around[i].type == "TIMED_MAX" or
+						light_around[i].type == "CURRENT_MAX") and
+						light_level > light_around[i].threshold then
+							return false
+					end
+				end
+			end
+		end
+		end
+		end
+	end
+
+	return true
+end
+
+local light_lookup = {
+		{4250+125, 150},
+		{4500+125, 150},
+		{4750+125, 250},
+		{5000+125, 350},
+		{5250+125, 500},
+		{5500+125, 675},
+		{5750+125, 875},
+		{6000+125, 1000},
+		{6250+125, 1000}
+	}
+
+function adv_spawning.day_night_ratio(time)
+
+	--make sure time is between 0 and 240000
+	if time < 0 then
+		time = time - (((time*-1)/24000)*24000)
+	end
+	if time > 24000 then
+		time = time + ((time/24000)*24000)
+	end
+
+	--invert time for sunset
+	if time > 12000 then
+		time = 24000 - time
+	end
+
+	local dnr = 1000
+
+	for i=1,#light_lookup,1 do
+		if time < light_lookup[i][1] then
+			dnr = light_lookup[i][2]
+			break
+		end
+	end
+
+	return dnr
+end
+
+function adv_spawning.voxelmaniplight(node_data,light_data,area,pos,time)
+
+	if not area:containsp(pos) then
+		return minetest.get_node_light(pos, time)
+	end
+
+	pos = vector.round(pos)
+	local index = area:indexp(pos)
+
+	local raw_light_value = light_data[index]
+
+	if raw_light_value == nil then
+		return nil
+	end
+
+	local light_day   = nil
+	local light_night = nil
+
+	--read node information
+	local content_id = node_data[index]
+	local nodename = minetest.get_name_from_content_id(content_id)
+	local nodedef = minetest.registered_nodes[nodename]
+
+	-- check for solid node
+	if nodedef.paramtype ~= "light" then
+		light_day = 0
+		light_night = 0
+	else
+		light_day   = raw_light_value % 16
+		light_night = (raw_light_value - light_day)/16
+	end
+
+	--check lightsource
+	if nodedef.light_source ~= nil then
+		light_day = adv_spawning.MAX(nodedef.light_source,light_day)
+		light_night = adv_spawning.MAX(nodedef.light_source,light_night)
+	end
+
+	time = time *24000
+	time = time %24000
+
+	local dnr = adv_spawning.day_night_ratio(time)
+
+	local c = 1000
+	local current_light = ((dnr * light_day + (c-dnr) * light_night))/c
+	if(current_light > LIGHT_MAX+1) then
+		current_light = LIGHT_MAX+1
+	end
+
+	return math.floor(current_light)
 end
 
 --------------------------------------------------------------------------------
@@ -1036,6 +1255,25 @@ function adv_spawning.check_collisionbox(pos,collisionbox,spawn_inside)
 end
 
 --------------------------------------------------------------------------------
+-- @function [parent=#adv_spawning] check_active_block
+-- @param pos position to check
+-- @param collisionbox collisionbox to use
+-- @param spawn_inside nodes to spawn inside
+--------------------------------------------------------------------------------
+function adv_spawning.check_active_block(pos)
+	local players = minetest.get_connected_players()
+
+	for i=1,#players,1 do
+		if vector.distance(pos,players[i]:getpos()) < adv_spawning.active_range then
+			return true
+		end
+	end
+
+
+	return false
+end
+
+--------------------------------------------------------------------------------
 -- @function [parent=#adv_spawning] is_same_pos
 -- @param pos1 first for comparison
 -- @param pos2 second position for comparison
@@ -1076,7 +1314,8 @@ function adv_spawning.handle_mapgen_spawning()
 			local retval,permanent_error = adv_spawning.handlespawner(toprocess.spawner,
 											{x=0,y=0,z=0},
 											toprocess.minp,
-											toprocess.maxp)
+											toprocess.maxp,
+											true)
 			if retval then
 				toprocess.spawntotal = toprocess.spawntotal -1
 			end

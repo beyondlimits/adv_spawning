@@ -16,15 +16,15 @@
 --------------------------------------------------------------------------------
 function adv_spawning.MAX(a,b)
 	if a == nil then
-		return b
+		return (b or 0)
 	end
 	if b == nil then
-		return a
+		return (a or 0)
 	end
 	if a > b then
-		return a
+		return (a or 0)
 	else
-		return b
+		return (b or 0)
 	end
 end
 
@@ -36,15 +36,15 @@ end
 --------------------------------------------------------------------------------
 function adv_spawning.MIN(a,b)
 	if a == nil then
-		return b
+		return (b or 0)
 	end
 	if b == nil then
-		return a
+		return (a or 0)
 	end
 	if a > b then
-		return b
+		return (b or 0)
 	else
-		return a
+		return (a or 0)
 	end
 end
 
@@ -64,7 +64,14 @@ function adv_spawning.initialize()
 	adv_spawning.max_spawning_frequency_hz = 5
 	adv_spawning.max_mapgen_tries_per_step = 3
 
-	adv_spawning.active_range = minetest.setting_get("active_block_range") * 16
+	adv_spawning.active_range = minetest.setting_get("active_block_range")
+
+	if (adv_spawning.active_range == nil) then
+		adv_spawning.log("info", "No \"active_block_range\" set, defaulting to 5")
+		adv_spawning.active_range = 5
+	else
+		adv_spawning.active_range = adv_spawning.active_range * 16
+	end
 
 	adv_spawning.spawner_definitions = {}
 	adv_spawning.mapgen_jobqueue = {}
@@ -171,6 +178,11 @@ end
 -- @param dtime time since last call
 --------------------------------------------------------------------------------
 function adv_spawning.global_onstep(dtime)
+
+	if dtime == 0 then
+		-- don't try to calc differences for no time
+		return
+	end
 
 	adv_spawning.statistics.step.last =
 		math.floor(adv_spawning.quota_reload - adv_spawning.quota_left + 0.5)
@@ -372,7 +384,9 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp,ignore_acti
 										spawndef.relative_height,
 										spawndef.spawn_inside) then
 		adv_spawning.log("info",
-			minetest.pos_to_string(new_pos) .. " didn't meet surface check")
+			minetest.pos_to_string(new_pos) ..
+			" didn't meet surface check, is: " ..
+			minetest.get_node({x=new_pos.x,z=new_pos.z,y=new_pos.y-1}).name)
 		return false,nil
 	end
 
@@ -1145,7 +1159,7 @@ function adv_spawning.check_flat_area(new_pos,flat_area,spawn_inside,surfaces)
 
 		if #ground_nodes > current_deviation then
 			adv_spawning.log("info","check_flat_area: " .. range .. " "
-				..dump(deviation).. " " .. #ground_nodes )
+				..dump(current_deviation).. " " .. #ground_nodes )
 			--adv_spawning.dump_area({x=back_left.x,y=new_pos.y-1,z=back_left.z},
 			--						front_right)
 			return false
@@ -1155,7 +1169,8 @@ function adv_spawning.check_flat_area(new_pos,flat_area,spawn_inside,surfaces)
 			minetest.find_nodes_in_area(back_left, front_right, surfaces)
 
 		if #ground_nodes < required_nodes then
-			adv_spawning.log("info","check_flat_area: " .. range .. " " ..dump(deviation).. " " .. #ground_nodes )
+			adv_spawning.log("info","check_flat_area: " .. range .. " " ..
+				dump(current_deviation).. " " .. #ground_nodes )
 			--adv_spawning.dump_area({x=back_left.x,y=new_pos.y-1,z=back_left.z},
 			--						front_right)
 			return false
@@ -1169,7 +1184,8 @@ function adv_spawning.check_flat_area(new_pos,flat_area,spawn_inside,surfaces)
 		minetest.find_nodes_in_area(back_left, front_right, spawn_inside)
 
 	if #inside_nodes < required_nodes then
-		adv_spawning.log("info","check_flat_area: " .. range .. " " .. dump(deviation) .. " "
+		adv_spawning.log("info","check_flat_area: " .. range .. " " ..
+			dump(current_deviation) .. " "
 			.. #inside_nodes .. "/" .. required_nodes)
 		--adv_spawning.dump_area({x=back_left.x,y=new_pos.y-1,z=back_left.z},
 		--						front_right)

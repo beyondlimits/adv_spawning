@@ -1,6 +1,6 @@
 ********************************************************************************
 *                                                                              *
-*              Advanced spawning mod (adv_spawning) 0.0.4                      *
+*              Advanced spawning mod (adv_spawning) 0.0.5                      *
 *                                                                              *
 *     URL: http://github.com/sapier/adv_spawning                               *
 *     Author: sapier                                                           *
@@ -188,3 +188,11 @@ Statistics:
 		avg = 0                 -- average load caused
 	}
 }
+
+Changelog:
+
+0.0.5
+ -fix MIN/MAX to always return a number value
+ -fix default activity range to use a initial value if not manually configured
+ -don't calculate statistics with zero dtime
+ -fix invalid debug log using old variable name

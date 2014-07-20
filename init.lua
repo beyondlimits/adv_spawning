@@ -8,10 +8,10 @@
 --
 -------------------------------------------------------------------------------
 
-local version = "0.0.5"
+local version = "0.0.6"
 
 if adv_spawning ~= nil then
-	minetest.log("error","MOD: adv_spawning requires adv_spawning variable to be available")
+	core.log("error","MOD: adv_spawning requires adv_spawning variable to be available")
 end
 
 --------------------------------------------------------------------------------
@@ -19,7 +19,9 @@ end
 -- -----------------------------------------------------------------------------
 adv_spawning = {}
 
-local adv_modpath = minetest.get_modpath("adv_spawning")
+adv_spawning.debug = core.setting_get("adv_spawning.debug")
+
+local adv_modpath = core.get_modpath("adv_spawning")
 
 dofile (adv_modpath .. "/internal.lua")
 dofile (adv_modpath .. "/spawndef_checks.lua")

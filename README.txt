@@ -1,6 +1,6 @@
 ********************************************************************************
 *                                                                              *
-*              Advanced spawning mod (adv_spawning) 0.0.5                      *
+*              Advanced spawning mod (adv_spawning) 0.0.6                      *
 *                                                                              *
 *     URL: http://github.com/sapier/adv_spawning                               *
 *     Author: sapier                                                           *
@@ -190,6 +190,11 @@ Statistics:
 }
 
 Changelog:
+
+0.0.6
+ -add configuration option adv_spawing.debug to show or hide spawner entities
+ -fix quota overflow calculation
+ -add rightclick function to show debug info
 
 0.0.5
  -fix MIN/MAX to always return a number value

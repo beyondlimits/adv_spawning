@@ -212,8 +212,12 @@ function adv_spawning.global_onstep(dtime)
 			adv_spawning.statistics.session.steps
 
 	--reduce following quota by overtime from last step
-	adv_spawning.quota_left =
-		adv_spawning.MAX(0,adv_spawning.quota_left+adv_spawning.quota_reload)
+	if adv_spawning.quota_left < 0 then
+		adv_spawning.quota_left =
+			adv_spawning.MAX(0,adv_spawning.quota_left + adv_spawning.quota_reload)
+	else
+		adv_spawning.quota_left = adv_spawning.quota_reload
+	end
 
 	if adv_spawning.quota_enter() then
 		adv_spawning.handle_mapgen_spawning()

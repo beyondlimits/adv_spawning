@@ -114,6 +114,22 @@ function adv_spawning.seed_activate(self)
 end
 
 --------------------------------------------------------------------------------
+-- @function [parent=#adv_spawning] on_rightclick
+-- @param self spawner entity
+-- @param clicker (unused)
+--------------------------------------------------------------------------------
+function adv_spawning.on_rightclick(self, clicker)
+	if adv_spawning.debug then
+		print("ADV_SPAWNING: Spawner may spawn following mobs:")
+		local index = 1
+		for key,value in pairs(self.spawning_data) do
+			print(string.format("%3d:",index) .. string.format("%30s ",key) .. string.format("%3d s", value))
+			index = index +1
+		end
+	end
+end
+
+--------------------------------------------------------------------------------
 -- @function [parent=#adv_spawning] seed_initialize
 --------------------------------------------------------------------------------
 function adv_spawning.seed_initialize()
@@ -121,10 +137,10 @@ function adv_spawning.seed_initialize()
 	local spawner_texture = "adv_spawning_invisible.png^[makealpha:128,0,0^[makealpha:128,128,0"
 	local spawner_collisionbox = { 0.0,0.0,0.0,0.0,0.0,0.0}
 
-	--if debug
+	if adv_spawning.debug then
 		spawner_texture = "adv_spawning_spawner.png"
 		spawner_collisionbox = { -0.5,-0.5,-0.5,0.5,0.5,0.5 }
-	--end
+	end
 
 	minetest.register_entity("adv_spawning:spawn_seed",
 		{
@@ -142,7 +158,8 @@ function adv_spawning.seed_initialize()
 			on_step         = adv_spawning.seed_step,
 			get_staticdata  = function(self)
 									return minetest.serialize(self.spawning_data)
-								end
+								end,
+			on_rightclick   = adv_spawning.on_rightclick
 		}
 	)
 end

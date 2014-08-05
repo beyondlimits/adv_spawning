@@ -8,7 +8,7 @@
 --
 -------------------------------------------------------------------------------
 
-local version = "0.0.6"
+local version = "0.0.7"
 
 if adv_spawning ~= nil then
 	core.log("error","MOD: adv_spawning requires adv_spawning variable to be available")
@@ -31,4 +31,4 @@ dofile (adv_modpath .. "/spawn_seed.lua")
 
 adv_spawning.initialize()
 
-print("Advanced spawning mod version " .. version .. " loaded")
+core.log("action","Advanced spawning mod version " .. version .. " loaded")

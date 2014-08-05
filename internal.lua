@@ -291,9 +291,16 @@ function adv_spawning.quota_leave()
 
 	local time_passed = now - adv_spawning.quota_starttime
 
-	assert(time_passed >= 0)
-
-	adv_spawning.quota_left = adv_spawning.quota_left - time_passed
+	if (time_passed < 0) then
+		if adv_spawning.timebackwardwarning ~= true then
+			core.log("error", "ADV_SPAWNING: Error either there's a bug in time"
+				.." calculation\n or your time just went backwards: old timestamp: "
+				.. adv_spawning.quota_starttime .. " current_time: " .. now .. "\n")
+			adv_spawning.timebackwardwarning = true
+		end
+	else
+		adv_spawning.quota_left = adv_spawning.quota_left - time_passed
+	end
 	adv_spawning.quota_starttime = nil
 	--print("-----------------Quota leave----------------------")
 end

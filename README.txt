@@ -191,6 +191,9 @@ Statistics:
 
 Changelog:
 
+0.0.7
+ -handle time steps backward without assertion
+
 0.0.6
  -add configuration option adv_spawing.debug to show or hide spawner entities
  -fix quota overflow calculation

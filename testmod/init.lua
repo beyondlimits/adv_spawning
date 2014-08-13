@@ -133,22 +133,22 @@ adv_spawning.register("some_bogus_entity_4",
 	})
 
 
-minetest.register_chatcommand("stats",
+minetest.register_chatcommand("adv_stats",
 	{
 		params		= "",
-		description = "show advanced spawning satistics" ,
+		description = "print advanced spawning satistics to logfile" ,
 		func		= function()
 			local stats = adv_spawning.get_statistics()
 
-			print("Adv. Spawning stats:")
-			print("----------------------------------------")
-			print("Spawners added: " .. stats.session.spawners_created)
-			print("Spawnees added: " .. stats.session.entities_created)
-			print("")
-			print("Longest step: " .. stats.step.max)
-			print("")
-			print("Current load: " .. stats.load.cur)
-			print("Average load: " .. stats.load.avg)
-			print("Maximum load: " .. stats.load.max)
+			adv_spawning.dbg_log(0, "Adv. Spawning stats:")
+			adv_spawning.dbg_log(0, "----------------------------------------")
+			adv_spawning.dbg_log(0, "Spawners added: " .. stats.session.spawners_created)
+			adv_spawning.dbg_log(0, "Spawnees added: " .. stats.session.entities_created)
+			adv_spawning.dbg_log(0, "")
+			adv_spawning.dbg_log(0, "Longest step: " .. stats.step.max)
+			adv_spawning.dbg_log(0, "")
+			adv_spawning.dbg_log(0, "Current load: " .. stats.load.cur)
+			adv_spawning.dbg_log(0, "Average load: " .. stats.load.avg)
+			adv_spawning.dbg_log(0, "Maximum load: " .. stats.load.max)
 		end
 	})

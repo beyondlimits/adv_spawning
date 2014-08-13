@@ -63,6 +63,8 @@ function adv_spawning.initialize()
 	adv_spawning.spawner_y_offset = 20
 	adv_spawning.max_spawning_frequency_hz = 5
 	adv_spawning.max_mapgen_tries_per_step = 3
+	adv_spawning.spawner_warned = {}
+	adv_spawning.loglevel = 0
 
 	adv_spawning.active_range = minetest.setting_get("active_block_range")
 
@@ -154,7 +156,9 @@ function adv_spawning.mapgen_hook(minp,maxp,blockseed)
 			if x > minp.x and
 				y > minp.y and
 				z > minp.z then
-				adv_spawning.quota_leave()
+				if not adv_spawning.quota_leave() then
+					adv_spawning.dbg_log(2, "mapgen_hook did use way too much time 1")
+				end
 				minetest.add_entity({x=x,y=y,z=z},"adv_spawning:spawn_seed")
 				adv_spawning.quota_enter(true)
 				adv_spawning.log("info", "adv_spawning: adding spawner entity at "
@@ -167,7 +171,9 @@ function adv_spawning.mapgen_hook(minp,maxp,blockseed)
 		end
 
 		adv_spawning.queue_mapgen_jobs(minp,maxp)
-		adv_spawning.quota_leave()
+		if not adv_spawning.quota_leave() then
+			adv_spawning.dbg_log(2, "mapgen_hook did use way too much time 2")
+		end
 	else
 		assert("Mapgen hook could not be executed" == nil)
 	end
@@ -221,7 +227,9 @@ function adv_spawning.global_onstep(dtime)
 
 	if adv_spawning.quota_enter() then
 		adv_spawning.handle_mapgen_spawning()
-		adv_spawning.quota_leave()
+		if not adv_spawning.quota_leave() then
+			adv_spawning.dbg_log(2, "globalstep took to long")
+		end
 	end
 end
 
@@ -233,25 +241,34 @@ end
 function adv_spawning.quota_enter(force)
 	--ONLY enable this one if you're quite sure there aren't bugs in
 	--assert(adv_spawning.quota_starttime == nil)
-
+	local retval = false
+	
 	if adv_spawning.quota_left <= 0 then
+	
 		if force == true then
-			print("Quota: task is too important to skip do it anyway," ..
-				" quota already passed by: " ..
-				string.format("%.2f ms",adv_spawning.quota_left))
-		else
-			if adv_spawning.quota_left * -2 > adv_spawning.quota_reload then
-				print("Quota: no time left: " ..
+			if adv_spawning.quota_left < -10 then
+				adv_spawning.dbg_log(1, "Quota: task is too important to skip do it anyway," ..
+					" quota already passed by: " ..
 					string.format("%.2f ms",adv_spawning.quota_left))
 			end
-			return false
+			retval = true
+		else
+			if adv_spawning.quota_left * -2 > adv_spawning.quota_reload then
+				adv_spawning.dbg_log(1, "Quota: no time left: " ..
+					string.format("%.2f ms",adv_spawning.quota_left))
+			end
 		end
+	else
+		retval = true
 	end
 --	print("+++++++++++++++++Quota enter+++++++++++++++++++++")
 --	print(debug.traceback())
 --	print("+++++++++++++++++++++++++++++++++++++++++++++++++")
-	adv_spawning.quota_starttime = adv_spawning.gettime()
-	return true
+	if retval then
+		adv_spawning.quota_starttime = adv_spawning.gettime()
+	end
+	
+	return retval
 end
 
 --------------------------------------------------------------------------------
@@ -301,8 +318,15 @@ function adv_spawning.quota_leave()
 	else
 		adv_spawning.quota_left = adv_spawning.quota_left - time_passed
 	end
+	
+	if (adv_spawning.quota_left < -adv_spawning.quota_reload) then
+		adv_spawning.dbg_log(1, "excessive overtime, quota remaining: " .. adv_spawning.quota_left)
+		return false
+	end
+	
 	adv_spawning.quota_starttime = nil
 	--print("-----------------Quota leave----------------------")
+	return true
 end
 
 --------------------------------------------------------------------------------
@@ -1296,7 +1320,6 @@ function adv_spawning.check_active_block(pos)
 		end
 	end
 
-
 	return false
 end
 
@@ -1338,11 +1361,16 @@ function adv_spawning.handle_mapgen_spawning()
 				tries < adv_spawning.max_mapgen_tries_per_step and
 				(not adv_spawning.time_over(10)) )do
 
+			local single_spawn_check = adv_spawning.gettime()
+
 			local retval,permanent_error = adv_spawning.handlespawner(toprocess.spawner,
 											{x=0,y=0,z=0},
 											toprocess.minp,
 											toprocess.maxp,
 											true)
+			
+			local delta = adv_spawning.gettime() - adv_spawning.quota_starttime
+
 			if retval then
 				toprocess.spawntotal = toprocess.spawntotal -1
 			end
@@ -1419,5 +1447,39 @@ function adv_spawning.dump_area(minp,maxp)
 		print(line)
 	end
 	print("")
+	end
+end
+
+--------------------------------------------------------------------------------
+-- @function [parent=#adv_spawning] check_time
+-- @param starttime time since when to check
+-- @param checkid name of this check
+--
+-- @return current time for next check
+--------------------------------------------------------------------------------
+function adv_spawning.check_time(starttime, checkid)
+	local currenttime = adv_spawning.gettime()
+	local delta = currenttime - starttime
+	
+	if (delta > adv_spawning.quota_reload) then
+		if adv_spawning.spawner_warned[checkid] ~= true then
+			adv_spawning.dbg_log(1, "spawner " .. checkid ..
+				"\n\texceeded more then full reload time on init (" .. delta .. " ms)." ..
+				"\n\tFix it as it will cause major lag on mapgen!")
+			adv_spawning.spawner_warned[checkid] = true
+		end
+	end
+	
+	return currenttime
+end
+
+--------------------------------------------------------------------------------
+-- @function [parent=#adv_spawning] dbg_log
+-- @param loglevel level print it
+-- @param message message to print
+--------------------------------------------------------------------------------
+function adv_spawning.dbg_log(loglevel, message)
+	if (adv_spawning.loglevel >= loglevel ) then
+		core.log("action", "ADV_SPAWNING: " .. message)
 	end
 end

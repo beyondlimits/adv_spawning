@@ -25,6 +25,11 @@ function adv_spawning.seed_step(self,dtime)
 	if (self.mydtime < 1/adv_spawning.max_spawning_frequency_hz) then
 		return
 	end
+	
+	--check if we did finish initialization of our spawner list by now
+	if not adv_spawning.seed_scan_for_applyable_spawners(self) then
+		return
+	end
 
 	if adv_spawning.quota_enter() then
 		self.pending_spawners = {}
@@ -39,12 +44,14 @@ function adv_spawning.seed_step(self,dtime)
 		end
 
 		local per_step_count = 0
+		local key = nil
 
 		while #self.pending_spawners > 0 and
-			per_step_count < adv_spawning.max_spawns_per_spawner do
+			per_step_count < adv_spawning.max_spawns_per_spawner and
+			adv_spawning.time_over(10) do
 
 			local rand_spawner = math.random(1,#self.pending_spawners)
-			local key = self.pending_spawners[rand_spawner]
+			key = self.pending_spawners[rand_spawner]
 
 			local tries = 1
 
@@ -63,7 +70,9 @@ function adv_spawning.seed_step(self,dtime)
 				end
 
 				--check quota again
-				adv_spawning.quota_leave()
+				if not adv_spawning.quota_leave() then
+					adv_spawning.dbg_log(2, "spawner " .. key .. " did use way too much time")
+				end
 				if not adv_spawning.quota_enter() then
 					return
 				end
@@ -76,9 +85,11 @@ function adv_spawning.seed_step(self,dtime)
 		end
 
 --		if (#self.pending_spawners > 0) then
---			print("Handled " .. per_step_count .. " spawners, spawners left: " .. #self.pending_spawners)
+--			adv_spawning.dbg_log(3, "Handled " .. per_step_count .. " spawners, spawners left: " .. #self.pending_spawners)
 --		end
-		adv_spawning.quota_leave()
+		if not adv_spawning.quota_leave() then
+			adv_spawning.dbg_log(2, "spawner " .. key .. " did use way too much time")
+		end
 	end
 end
 
@@ -103,13 +114,14 @@ function adv_spawning.seed_activate(self)
 		end
 
 		adv_spawning.seed_validate_spawndata(self)
-
-		adv_spawning.seed_scan_for_applyable_spawners(self)
-
+		
 		self.pending_spawners = {}
+		self.initialized_spawners = 0
 		self.activated = true
 
-		adv_spawning.quota_leave()
+		if not adv_spawning.quota_leave() then
+			adv_spawning.dbg_log(2, "on activate  " .. self.name .. " did use way too much time")
+		end
 	end
 end
 
@@ -208,9 +220,27 @@ end
 -- @return true/false
 --------------------------------------------------------------------------------
 function adv_spawning.seed_scan_for_applyable_spawners(self)
+
+	if self.initialized_spawners >= #adv_spawning.spawner_definitions then
+		return true
+	end
+
+	local runindex = 0
 	local pos = self.object:getpos()
 	for key,value in pairs(adv_spawning.spawner_definitions) do
+		if not adv_spawning.quota_enter() then
+			return false
+		end
+		local starttime = adv_spawning.gettime()
 		local continue = false
+		
+		if runindex >= self.initialized_spawners then
+			self.initialized_spawners = self.initialized_spawners + 1
+		else
+			continue = true
+		end
+		
+		runindex = runindex + 1
 
 		--check if cyclic spawning is enabled
 		if not continue and
@@ -234,6 +264,7 @@ function adv_spawning.seed_scan_for_applyable_spawners(self)
 				continue = true
 			end
 		end
+		starttime = adv_spawning.check_time(starttime, key  .. " at spawn range check")
 
 		--check for presence of environment
 		if not continue then
@@ -246,6 +277,7 @@ function adv_spawning.seed_scan_for_applyable_spawners(self)
 				continue = false
 			end
 		end
+		starttime = adv_spawning.check_time(starttime, key .. " at environment check")
 
 		if not continue then
 			self.spawning_data[key] = value.spawn_interval * math.random()
@@ -253,4 +285,6 @@ function adv_spawning.seed_scan_for_applyable_spawners(self)
 			self.spawning_data[key] = nil
 		end
 	end
+	
+	return self.initialized_spawners == #adv_spawning.spawner_definitions
 end

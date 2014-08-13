@@ -25,7 +25,7 @@ function adv_spawning.register(spawner_name,spawning_def)
 		end
 
 		adv_spawning.spawner_definitions[spawner_name] = spawning_def
-		print("ADV_SPAWNING: registering spawner \"" .. spawner_name .. "\"")
+		adv_spawning.dbg_log(0, "registering spawner \"" .. spawner_name .. "\"")
 		return true
 	else
 		return false

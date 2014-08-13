@@ -19,13 +19,13 @@ function adv_spawning.verify_check_entities_around(entities_around)
 		for i=1,#entities_around,1 do
 
 			if type(entities_around[i].distance) ~= "number" then
-				print("ADV_SPAWNING: missing distance in entities_around definition")
+				adv_spawning.dbg_log(0, "missing distance in entities_around definition")
 				return false
 			end
 
 			if entities_around[i].type ~= "MIN" and
 				entities_around[i].type ~= "MAX" then
-				print("ADV_SPAWNING: invalid type \"" ..
+				adv_spawning.dbg_log(0, "invalid type \"" ..
 					dump(entities_around[i].type) ..
 					"\" in entities_around definition")
 				return false
@@ -46,13 +46,13 @@ function adv_spawning.verify_check_nodes_around(nodes_around)
 		for i=1,#nodes_around,1 do
 
 			if type(nodes_around[i].distance) ~= "number" then
-				print("ADV_SPAWNING: missing distance in entities_around definition")
+				adv_spawning.dbg_log(0, "missing distance in entities_around definition")
 				return false
 			end
 
 			if nodes_around[i].type ~= "MIN" and
 				nodes_around[i].type ~= "MAX" then
-				print("ADV_SPAWNING: invalid type \"" ..
+				adv_spawning.dbg_log(0, "invalid type \"" ..
 					dump(nodes_around[i].type) ..
 					"\" in entities_around definition")
 				return false
@@ -60,7 +60,7 @@ function adv_spawning.verify_check_nodes_around(nodes_around)
 
 			if nodes_around[i].name == nil or
 				type(nodes_around[i].name) ~= "table" then
-				print("ADV_SPAWNING: invalid type of name \"" ..
+				adv_spawning.dbg_log(0, "invalid type of name \"" ..
 					type(nodes_around[i].name) .. "\"" .. " Data: " ..
 					dump(nodes_around[i].name) ..
 					" in nodes_around definition")

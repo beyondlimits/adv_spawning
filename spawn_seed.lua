@@ -35,6 +35,7 @@ function adv_spawning.seed_step(self,dtime)
 		self.pending_spawners = {}
 
 		adv_spawning.seed_countdown_spawners(self,self.mydtime)
+		
 		self.mydtime = 0
 
 		--check quota again
@@ -48,7 +49,7 @@ function adv_spawning.seed_step(self,dtime)
 
 		while #self.pending_spawners > 0 and
 			per_step_count < adv_spawning.max_spawns_per_spawner and
-			adv_spawning.time_over(10) do
+			(not adv_spawning.time_over(10)) do
 
 			local rand_spawner = math.random(1,#self.pending_spawners)
 			key = self.pending_spawners[rand_spawner]
@@ -132,7 +133,9 @@ end
 --------------------------------------------------------------------------------
 function adv_spawning.on_rightclick(self, clicker)
 	if adv_spawning.debug then
-		print("ADV_SPAWNING: Spawner may spawn following mobs:")
+		print("ADV_SPAWNING: time till next spawn: " .. self.mydtime)
+		print("ADV_SPAWNING: pending spawners: " .. #self.pending_spawners)
+		print("ADV_SPAWNING: Spawner may spawn " .. adv_spawning.table_count(self.spawning_data) .. " mobs:")
 		local index = 1
 		for key,value in pairs(self.spawning_data) do
 			print(string.format("%3d:",index) .. string.format("%30s ",key) .. string.format("%3d s", value))
@@ -165,6 +168,7 @@ function adv_spawning.seed_initialize()
 									self.activated = false
 									self.mydtime = dtime_s
 									self.serialized_data = staticdata
+									self.object:set_armor_groups({ immortal=100 })
 									adv_spawning.seed_activate(self)
 								end,
 			on_step         = adv_spawning.seed_step,
@@ -210,7 +214,27 @@ end
 -- @return true/false
 --------------------------------------------------------------------------------
 function adv_spawning.seed_check_for_collision(self)
-	--TODO check if there already is another spawner at exactly this position
+	assert(self ~= nil)
+	local pos = self.object:getpos()
+	local objects = minetest.get_objects_inside_radius(pos, 0.5)
+	
+	if objects == nil then
+		return false
+	end
+	
+	-- check if any of those found objects is a spawning seed
+	for k,v in ipairs(objects) do
+		local entity = v:get_luaentity()
+		
+		if entity ~= nil then
+			if entity.name == "adv_spawning:spawn_seed" and
+				entity.object ~= self.object then
+				self.object:remove()
+				return true
+			end
+		end
+	end
+	
 	return false
 end
 
@@ -221,7 +245,8 @@ end
 --------------------------------------------------------------------------------
 function adv_spawning.seed_scan_for_applyable_spawners(self)
 
-	if self.initialized_spawners >= #adv_spawning.spawner_definitions then
+	if self.initialized_spawners >=
+			adv_spawning.table_count(adv_spawning.spawner_definitions) then
 		return true
 	end
 

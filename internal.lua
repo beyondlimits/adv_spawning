@@ -65,6 +65,8 @@ function adv_spawning.initialize()
 	adv_spawning.max_mapgen_tries_per_step = 3
 	adv_spawning.spawner_warned = {}
 	adv_spawning.loglevel = 0
+	adv_spawning.spawner_validation_delta = 0
+	adv_spawning.spawner_validation_interval = 30
 
 	adv_spawning.active_range = minetest.setting_get("active_block_range")
 
@@ -216,6 +218,32 @@ function adv_spawning.global_onstep(dtime)
 			(adv_spawning.statistics.session.steps-1)) +
 			adv_spawning.statistics.load.cur) /
 			adv_spawning.statistics.session.steps
+			
+	if core.is_yes(
+			core.setting_get("adv_spawning_validate_spawners")) then
+		
+			adv_spawning.spawner_validation_delta =
+					adv_spawning.spawner_validation_delta + dtime
+					
+			if adv_spawning.spawner_validation_delta >
+					adv_spawning.spawner_validation_interval then
+				
+				if adv_spawning.quota_enter() then
+					local playerlist = core.get_connected_players()
+					
+					for k,v in ipairs(playerlist) do
+						if not adv_spawning.time_over(10) then
+							adv_spawning.refresh_spawners(v:getpos())
+						else
+							break
+						end
+					end
+					
+					adv_spawning.spawner_validation_delta = 0
+				
+				end
+			end
+	end
 
 	--reduce following quota by overtime from last step
 	if adv_spawning.quota_left < 0 then
@@ -1491,4 +1519,65 @@ function adv_spawning.dbg_log(loglevel, message)
 	if (adv_spawning.loglevel >= loglevel ) then
 		core.log("action", "ADV_SPAWNING: " .. message)
 	end
+end
+
+
+--------------------------------------------------------------------------------
+-- @function [parent=#adv_spawning] refresh_spawners
+-- @param pos to refresh spawners around
+--------------------------------------------------------------------------------
+function adv_spawning.refresh_spawners(pos)
+
+	local min = {x=pos.x-32, y=pos.y-32, z=pos.z-32}
+	local max = {x=pos.x+32, y=pos.y+32, z=pos.z+32}
+
+	core.log("action", "Checking spawners from: " .. core.pos_to_string(min) ..
+			" to " .. core.pos_to_string(max))
+
+	local start_x =
+		math.floor(min.x/adv_spawning.spawner_distance)
+		* adv_spawning.spawner_distance
+	local start_y =
+		(math.floor(min.y/adv_spawning.spawner_distance)
+			* adv_spawning.spawner_distance)
+			+ adv_spawning.spawner_y_offset
+	local start_z =
+		math.floor(min.z/adv_spawning.spawner_distance)
+		* adv_spawning.spawner_distance
+
+	for x=start_x,max.x,adv_spawning.spawner_distance do
+	for y=start_y,max.y,adv_spawning.spawner_distance do
+	for z=start_z,max.z,adv_spawning.spawner_distance do
+
+		core.log("action", "Checking: (" .. x .. "," .. y .. "," .. z .. ")")
+		if x > min.x and
+			y > min.y and
+			z > min.z then
+			if not adv_spawning.quota_leave() then
+				adv_spawning.dbg_log(2,
+					"adv_spawning: refresh_spawners did use way too much time 1")
+			end
+			minetest.add_entity({x=x,y=y,z=z},"adv_spawning:spawn_seed")
+			adv_spawning.quota_enter(true)
+			adv_spawning.log("info", "adv_spawning: adding spawner entity at "
+				.. core.pos_to_string({x=x,y=y,z=z}))
+			adv_spawning.statistics.session.spawners_created =
+				adv_spawning.statistics.session.spawners_created +1
+		end
+	end
+	end
+	end
+end
+
+--------------------------------------------------------------------------------
+-- @function [parent=#adv_spawning] table_count
+-- @param tocount table to get number of elements from
+--------------------------------------------------------------------------------
+function adv_spawning.table_count(tocount)
+	local retval = 0
+	for k,v in pairs(tocount) do
+		retval = retval +1
+	end
+	
+	return retval
 end

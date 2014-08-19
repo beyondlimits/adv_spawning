@@ -189,7 +189,21 @@ Statistics:
 	}
 }
 
+Settings:
+  adv_spawning_validate_spawners = false
+  ^ make advanced_spawning check area around active players for lost spawner seeds
+
 Changelog:
+
+0.0.9
+ -Fix broken spawner initialization
+ -Add support for regenerating spawner seeds (only around active players)
+  set >>adv_spawning_validate_spawners<< to true if you want advanced spawning
+  to do this.
+  Note: this might need some additional cpu time
+
+0.0.8
+ -Fix large steps caused by uninterruptable spawn seed initialization within activation
 
 0.0.7
  -handle time steps backward without assertion

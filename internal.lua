@@ -1531,9 +1531,6 @@ function adv_spawning.refresh_spawners(pos)
 	local min = {x=pos.x-32, y=pos.y-32, z=pos.z-32}
 	local max = {x=pos.x+32, y=pos.y+32, z=pos.z+32}
 
-	core.log("action", "Checking spawners from: " .. core.pos_to_string(min) ..
-			" to " .. core.pos_to_string(max))
-
 	local start_x =
 		math.floor(min.x/adv_spawning.spawner_distance)
 		* adv_spawning.spawner_distance
@@ -1548,8 +1545,6 @@ function adv_spawning.refresh_spawners(pos)
 	for x=start_x,max.x,adv_spawning.spawner_distance do
 	for y=start_y,max.y,adv_spawning.spawner_distance do
 	for z=start_z,max.z,adv_spawning.spawner_distance do
-
-		core.log("action", "Checking: (" .. x .. "," .. y .. "," .. z .. ")")
 		if x > min.x and
 			y > min.y and
 			z > min.z then

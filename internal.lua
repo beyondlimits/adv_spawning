@@ -373,7 +373,7 @@ end
 -- @param minp (OPTIONAL) override spawner defaults
 -- @param maxp (OPTIONAL) override spawner defaults
 -- @param ignore_active_area set to true for mapgen spawning
--- @return successfull true/false, permanent_error true,false
+-- @return successfull true/false, permanent_error true,false, reason_string
 --------------------------------------------------------------------------------
 function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp,ignore_active_area)
 
@@ -382,7 +382,7 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp,ignore_acti
 
 	if not adv_spawning.check_daytime(spawndef.daytimes) then
 		adv_spawning.log("info","didn't meet daytime check")
-		return false,nil
+		return false,nil, "daytimecheck failed"
 	end
 
 	local max_x = spawnerpos.x + adv_spawning.spawner_distance/2
@@ -412,15 +412,16 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp,ignore_acti
 	new_pos.x = math.random(min_x,max_x)
 	new_pos.z = math.random(min_z,max_z)
 
+	local yreason = "ukn"
 
 	--check if entity is configured to spawn at surface
 	if spawndef.relative_height == nil or
 		(spawndef.relative_height.max ~= nil and
 			spawndef.relative_height.max <= 1) then
-		new_pos.y = adv_spawning.get_surface(lower_y,upper_y,new_pos,
+		new_pos.y, yreason = adv_spawning.get_surface(lower_y,upper_y,new_pos,
 							spawndef.spawn_inside)
 	else
-		new_pos.y = adv_spawning.get_relative_pos(lower_y,upper_y,new_pos,
+		new_pos.y, yreason = adv_spawning.get_relative_pos(lower_y,upper_y,new_pos,
 							spawndef.spawn_inside,
 							spawndef.relative_height,
 							spawndef.absolute_height)
@@ -432,21 +433,22 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp,ignore_acti
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't find a suitable y pos "
 			.. lower_y .. "<-->" .. upper_y )
-		return false,nil
+		return false, nil, "didn't find a valid ypos at " .. minetest.pos_to_string(new_pos)
+				    .. " " .. lower_y .. "<-->" .. upper_y .. " rsn: " .. yreason
 	end
 
 	--check absolute height
 	if not adv_spawning.check_absolute_height(new_pos,spawndef.absolute_height) then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet absolute height check")
-		return false,true
+		return false, true, "absolute height check failed"
 	end
 
 	--check active area
 	if not ignore_active_area and not adv_spawning.check_active_block(new_pos) then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet active area check")
-		return false,nil
+		return false, nil , "area check failed"
 	end
 
 	--check surface
@@ -459,7 +461,7 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp,ignore_acti
 			minetest.pos_to_string(new_pos) ..
 			" didn't meet surface check, is: " ..
 			minetest.get_node({x=new_pos.x,z=new_pos.z,y=new_pos.y-1}).name)
-		return false,nil
+		return false, nil, "surface check failed"
 	end
 
 	--flat area check
@@ -470,7 +472,7 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp,ignore_acti
 								spawndef.surfaces) then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet flat area check")
-		return false,nil
+		return false, nil, "flat area check failed"
 	end
 
 	--check collisionbox
@@ -485,28 +487,28 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp,ignore_acti
 	if not checkresult then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet collisionbox check")
-		return false,nil
+		return false, nil, "collision box check failed"
 	end
 
 	--check entities around
 	if not adv_spawning.check_entities_around(new_pos,spawndef.entities_around) then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet entities check")
-		return false,nil
+		return false, nil, "entitie around check failed"
 	end
 
 	--check nodes around
 	if not adv_spawning.check_nodes_around(new_pos,spawndef.nodes_around) then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet nodes check")
-		return false,nil
+		return false, nil, "nodes around check failed"
 	end
 
 	--check light around
 	if not adv_spawning.check_light_around(new_pos,spawndef.light_around) then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet light  check")
-		return false,nil
+		return false, nil, "light check failed"
 	end
 
 --  ONLY use this if you have luajit
@@ -514,31 +516,37 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp,ignore_acti
 --	if not adv_spawning.check_light_around_voxel(new_pos,spawndef.light_around) then
 --		adv_spawning.log("info",
 --			minetest.pos_to_string(new_pos) .. " didn't meet light  check")
---		return false,nil
+--		return false, nil, "luajit light check failed"
 --	end
 
 	--check humidity
 	if not adv_spawning.check_humidity_around(new_pos,spawndef.humidity_around) then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet humidity check")
-		return false,nil
+		return false, nil, "humidity check failed"
 	end
 
 	--check temperature
 	if not adv_spawning.check_temperature_around(new_pos,spawndef.temperature_around) then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet temperature check")
-		return false,nil
+		return false, nil, "temperature check failed"
 	end
 
 	--custom check
 	if (spawndef.custom_check ~= nil and
 		type(spawndef.custom_check) == "function") then
+	  
+		local retval, reason = spawndef.custom_check(new_pos,spawndef)
+		
+		if not reason then
+			reason = "custom check failed"
+		end
 
-		if not spawndef.custom_check(new_pos,spawndef) then
+		if not retval then
 			adv_spawning.log("info",
 				minetest.pos_to_string(new_pos) .. " didn't meet custom check")
-			return false,nil
+			return false, nil, reason
 		end
 	end
 
@@ -570,30 +578,47 @@ function adv_spawning.get_surface(y_min,y_max,new_pos,spawn_inside)
 	local top_pos = { x=new_pos.x, z=new_pos.z, y=y_max}
 	local bottom_pos = { x=new_pos.x, z=new_pos.z, y=y_min}
 
+	-- get list of all nodes within our y-range we could spawn within
 	local spawnable_nodes =
 		minetest.find_nodes_in_area(bottom_pos, top_pos, spawn_inside)
 
+	-- if there ain't a single node to spawn within get out of here
 	if #spawnable_nodes == 0 then
-		return nil
+		return nil, "no spawnable nodes at all"
 	end
 
 	local spawnable_node_passed = false
 
+	-- loop from topmost position to bottom
 	for i=y_max, y_min, -1 do
+		-- get current position
 		local pos = { x=new_pos.x,z=new_pos.z,y=i}
+		
+		-- if the node at current position ain't one of those we can spawn within
 		if not adv_spawning.contains_pos(spawnable_nodes,pos) then
+			
+			-- get more information about this node
 			local node = minetest.get_node(pos)
+			
+			local text = "false"
+			
+			if spawnable_node_passed then
+			   text = "true"
+			end
 
+			-- if node ain't unloaded and we did already see a spawnable node above
+			-- return position above as pos to spawn
 			if node.name ~= "ignore" and
 				spawnable_node_passed then
-				return i+1
+				return i+1, "pos found"
 			end
 		else
+			-- set marker about having seen a spawnable node above
 			spawnable_node_passed = true
 		end
 	end
 
-	return nil
+	return nil, "no matching node, nodecnt: " ..  #spawnable_nodes
 end
 
 --------------------------------------------------------------------------------
@@ -612,7 +637,8 @@ function adv_spawning.get_relative_pos(y_min,y_max,new_pos,spawn_inside,relative
 	if y_val == nil then
 		if (relative_height.min ~= nil or
 			relative_height.max ~= nil) then
-			return nil
+			return nil, "y_pos not witing range of " 
+				.. relative_height.min .. "<-->" .. relative_height.max
 		else
 			y_val = y_min
 		end
@@ -636,17 +662,17 @@ function adv_spawning.get_relative_pos(y_min,y_max,new_pos,spawn_inside,relative
 
 	if top_pos.y < bottom_pos.y then
 		--print("Invalid interval: " .. bottom_pos.y .. "<-->" .. top_pos.y)
-		return nil
+		return nil, "invalid interval: " .. bottom_pos.y .. "<-->" .. top_pos.y
 	end
 
 	local spawnable_nodes =
 		minetest.find_nodes_in_area(bottom_pos, top_pos, spawn_inside)
 
 	if #spawnable_nodes > 0 then
-		return spawnable_nodes[math.random(1,#spawnable_nodes)].y
+		return spawnable_nodes[math.random(1,#spawnable_nodes)].y, "rpos found"
 	else
 		--print("no suitable nodes" .. bottom_pos.y .. "<-->" .. top_pos.y)
-		return nil
+		return nil, "no spawnable nodes found around"
 	end
 end
 
@@ -1225,7 +1251,7 @@ function adv_spawning.check_flat_area(new_pos,flat_area,spawn_inside,surfaces)
 
 	local required_nodes = (range*2+1)*(range*2+1) - current_deviation
 
-	if surface == nil then
+	if surfaces == nil then
 		local ground_nodes =
 			minetest.find_nodes_in_area(back_left, front_right, spawn_inside)
 

@@ -61,13 +61,17 @@ function adv_spawning.seed_step(self,dtime)
 			end
 
 			while tries > 0 do
+				local successfull, permanent_error, reason =
+					adv_spawning.handlespawner(key,self.object:getpos())
 
-				if adv_spawning.handlespawner(key,self.object:getpos()) then
+				if successfull then
 					self.spawning_data[key] =
 						adv_spawning.spawner_definitions[key].spawn_interval
+					self.spawn_fail_reasons[key] = "successfull spawned"
 				else
 					self.spawning_data[key] =
 						adv_spawning.spawner_definitions[key].spawn_interval/4
+					self.spawn_fail_reasons[key] = reason
 				end
 
 				--check quota again
@@ -117,8 +121,18 @@ function adv_spawning.seed_activate(self)
 		adv_spawning.seed_validate_spawndata(self)
 		
 		self.pending_spawners = {}
+		self.spawn_fail_reasons = {}
 		self.initialized_spawners = 0
 		self.activated = true
+		
+		-- fix unaligned own pos
+		local pos = self.object:getpos()
+		
+		pos.x = math.floor(pos.x + 0.5)
+		pos.y = math.floor(pos.y + 0.5)
+		pos.z = math.floor(pos.z + 0.5)
+		
+		self.object:setpos(pos)
 
 		if not adv_spawning.quota_leave() then
 			adv_spawning.dbg_log(2, "on activate  " .. self.name .. " did use way too much time")
@@ -138,7 +152,13 @@ function adv_spawning.on_rightclick(self, clicker)
 		print("ADV_SPAWNING: Spawner may spawn " .. adv_spawning.table_count(self.spawning_data) .. " mobs:")
 		local index = 1
 		for key,value in pairs(self.spawning_data) do
-			print(string.format("%3d:",index) .. string.format("%30s ",key) .. string.format("%3d s", value))
+			local reason = "unknown"
+			
+			if self.spawn_fail_reasons[key] then
+			  reason = self.spawn_fail_reasons[key]
+			end  
+			
+			print(string.format("%3d:",index) .. string.format("%30s ",key) .. string.format("%3d s (", value) .. reason .. ")")
 			index = index +1
 		end
 	end

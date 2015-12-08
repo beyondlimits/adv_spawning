@@ -438,10 +438,11 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp,ignore_acti
 	end
 
 	--check absolute height
-	if not adv_spawning.check_absolute_height(new_pos,spawndef.absolute_height) then
+	local abs_height_retval, abs_height_rsn = adv_spawning.check_absolute_height(new_pos,spawndef.absolute_height)
+	if not abs_height_retval then
 		adv_spawning.log("info",
 			minetest.pos_to_string(new_pos) .. " didn't meet absolute height check")
-		return false, true, "absolute height check failed"
+		return false, true, "absolute height check failed rsn: " .. abs_height_rsn
 	end
 
 	--check active area
@@ -707,20 +708,20 @@ end
 --------------------------------------------------------------------------------
 function adv_spawning.check_absolute_height(pos,absolute_height)
 	if absolute_height == nil then
-		return true
+		return true, "no height limit"
 	end
 
 	if absolute_height.min ~= nil and
 		pos.y < absolute_height.min then
-		return false
+		return false, pos.y .. " < " .. absolute_height.min
 	end
 
 	if absolute_height.max ~= nil and
 		pos.y > absolute_height.max then
-		return false
+		return false, pos.y .. " > " .. absolute_height.max
 	end
 
-	return true
+	return true, "height ok"
 end
 
 --------------------------------------------------------------------------------

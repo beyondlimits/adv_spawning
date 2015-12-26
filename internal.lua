@@ -105,6 +105,7 @@ function adv_spawning.initialize()
 	adv_spawning.gettime = function() return os.clock() * 1000 end
 
 	if type(minetest.get_us_time) == "function" then
+		adv_spawning.log("action", "Using minetest.get_us_time() for quota calc")
 		adv_spawning.gettime = function()
 				return minetest.get_us_time() / 1000
 			end
@@ -113,6 +114,7 @@ function adv_spawning.initialize()
 			local status, module = pcall(require, 'socket')
 
 			if status and type(module.gettime) == "function" then
+				adv_spawning.log("action", "Using socket.gettime() for quota calc")
 				adv_spawning.gettime = function()
 						return socket.gettime()*1000
 					end
@@ -1602,4 +1604,82 @@ function adv_spawning.table_count(tocount)
 	end
 	
 	return retval
+end
+
+function adv_spawning.build_shell(pos, d)
+	local retval = {}
+	
+	-- build top face
+	for x = -d , d , 1 do
+		for z = -d, d, 1 do
+			retval[#retval+1] =  { x = pos.x + x, y = pos.y + d, z = pos.z + z}
+		end
+	end
+	
+	-- build bottom face
+	for x = -d , d , 1 do
+		for z = -d, d, 1 do
+			retval[#retval+1] =  { x = pos.x + x, y = pos.y -d, z = pos.z + z}
+		end
+	end
+	
+	-- build x- face
+	for z = -d , d , 1 do
+		for y = - (d -1) , (d -1), 1 do
+			retval[#retval+1] =  { x = pos.x -d, y = pos.y + y, z = pos.z + z}
+		end
+	end
+	
+	-- build x+ face
+	for z = -d , d , 1 do
+		for y = - (d -1) , (d -1), 1 do
+			retval[#retval+1] =  { x = pos.x + d, y = pos.y + y, z = pos.z + z}
+		end
+	end
+	
+	-- build z- face
+	for x = - (d -1) , (d -1) , 1 do
+		for y = - (d -1) , (d -1), 1 do
+			retval[#retval+1] =  { x = pos.x + x, y = pos.y + y, z = pos.z - d}
+		end
+	end
+	
+	-- build z+ face
+	for x = -(d -1) , (d -1) , 1 do
+		for y = - (d -1) , (d -1), 1 do
+			retval[#retval+1] =  { x = pos.x + x, y = pos.y + y, z = pos.z + d}
+		end
+	end
+	
+	return retval;
+end
+
+--------------------------------------------------------------------------------
+-- @function [parent=#adv_spawning] table_count
+-- @param tocount table to get number of elements from
+--------------------------------------------------------------------------------
+function adv_spawning.find_nodes_in(pos, min_range, max_range, nodetypes)
+
+	if type(nodetypes) == "string" then
+		local templist = { nodetypes }
+		nodetypes = templist
+	end
+	
+	for i = min_range, max_range, 1 do
+		local positions = adv_spawning.build_shell(pos, i)
+		
+		for i = 1, #positions, 1 do
+			local node = minetest.get_node_or_nil(positions[i])
+			
+			if node ~= nil then
+				for i = 1, #nodetypes, 1 do
+					if node.name == nodetypes[i] then
+						return positions[i]
+					end
+				end
+			end
+		end
+	end
+	
+	return nil
 end

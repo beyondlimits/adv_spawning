@@ -16,7 +16,9 @@
 --------------------------------------------------------------------------------
 function adv_spawning.seed_step(self,dtime)
 	if not self.activated then
+		local starttime = adv_spawning.gettime()
 		adv_spawning.seed_activate(self)
+		adv_spawning.check_time(starttime, "Initializing spawner on_step took way too much time")
 		return
 	end
 
@@ -30,7 +32,7 @@ function adv_spawning.seed_step(self,dtime)
 	if not adv_spawning.seed_scan_for_applyable_spawners(self) then
 		return
 	end
-
+	
 	if adv_spawning.quota_enter() then
 		self.pending_spawners = {}
 
@@ -46,10 +48,13 @@ function adv_spawning.seed_step(self,dtime)
 
 		local per_step_count = 0
 		local key = nil
+		
+		local starttime = adv_spawning.gettime()
 
 		while #self.pending_spawners > 0 and
 			per_step_count < adv_spawning.max_spawns_per_spawner and
 			(not adv_spawning.time_over(10)) do
+			
 
 			local rand_spawner = math.random(1,#self.pending_spawners)
 			key = self.pending_spawners[rand_spawner]
@@ -84,7 +89,11 @@ function adv_spawning.seed_step(self,dtime)
 
 				tries = tries -1
 			end
-
+			
+			
+			starttime = adv_spawning.check_time(starttime, key .. " for " .. 
+				adv_spawning.spawner_definitions[key].spawnee .. " did use way too much time")
+			
 			table.remove(self.pending_spawners,rand_spawner)
 			per_step_count = per_step_count +1
 		end
@@ -258,6 +267,90 @@ function adv_spawning.seed_check_for_collision(self)
 	return false
 end
 
+
+function adv_spawning.init_spawner(self, pos, name, spawnerdef)
+	local starttime = adv_spawning.gettime()
+
+	if self.spawner_init_state ~= nil then
+		self.spawner_init_state = "initial"
+	end
+	
+	local starttime = adv_spawning.gettime()
+	if self.spawner_init_state == "initial" then
+		
+		--check if cyclic spawning is enabled
+		if spawnerdef.cyclic_spawning ~= nil and
+			spawnerdef.cyclic_spawning == false then
+			self.spawning_data[name] = nil
+			return true
+		end
+		self.spawner_init_state = "abs_height"
+	end
+	
+	starttime = adv_spawning.check_time(starttime, name  .. "cyclic check")	
+	if self.spawner_init_state == "abs_height" then
+		--if spawner is far away from spawn area don't even try to spawn
+		if spawnerdef.absolute_height ~= nil then
+			if spawnerdef.absolute_height.min ~= nil and
+				spawnerdef.absolute_height.min
+				> pos.y + (adv_spawning.spawner_distance/2) then
+				self.spawning_data[name] = nil
+				return true
+			end
+
+			if spawnerdef.absolute_height.max ~= nil
+				and spawnerdef.absolute_height.max
+				< pos.y - (adv_spawning.spawner_distance/2) then
+				self.spawning_data[name] = nil
+				return true
+			end
+		end
+		self.spawner_init_state = "environment"
+	end	
+	
+	starttime = adv_spawning.check_time(starttime, name  .. "height check")
+	if self.spawner_init_state == "environment" then
+	
+		local runidx = 1
+		local radius = adv_spawning.spawner_distance / 2
+	
+		if self.spawnerinit_env_radius ~= nil then
+			runidx = self.spawnerinit_env_radius
+		end
+		
+		local found = false
+		
+		for i = runidx , radius, 1 do
+			adv_spawning.quota_leave()
+			
+			if not adv_spawning.quota_enter() then
+				self.spawnerinit_env_radius = runidx
+				return false
+			end
+			
+			local resultpos = adv_spawning.find_nodes_in(pos, runidx, runidx, spawnerdef.spawn_inside)
+			
+			if (resultpos ~= nil) then
+				local node = minetest.get_node_or_nil(resultpos)
+				found = true
+				break
+			end
+		end
+		
+		starttime = adv_spawning.check_time(starttime, name ..
+			" at environment check radius was: " .. radius ..
+				" env: " .. dump(spawnerdef.spawn_inside))
+				
+		if not found then
+			self.spawning_data[name] = nil
+		end
+	end	
+	
+	self.spawner_init_state = "initial"
+	self.spawning_data[name] = spawnerdef.spawn_interval * math.random()
+	return true
+end
+
 --------------------------------------------------------------------------------
 -- @function [parent=#adv_spawning] seed_scan_for_applyable_spawners
 -- @param self spawner entity
@@ -271,12 +364,17 @@ function adv_spawning.seed_scan_for_applyable_spawners(self)
 	end
 
 	local runindex = 0
+	
+	if self.spawner_init_idx ~= nil then
+		runindex = self.spawner_init_idx
+	end
+	
 	local pos = self.object:getpos()
 	for key,value in pairs(adv_spawning.spawner_definitions) do
 		if not adv_spawning.quota_enter() then
 			return false
 		end
-		local starttime = adv_spawning.gettime()
+		
 		local continue = false
 		
 		if runindex >= self.initialized_spawners then
@@ -285,50 +383,15 @@ function adv_spawning.seed_scan_for_applyable_spawners(self)
 			continue = true
 		end
 		
-		runindex = runindex + 1
-
-		--check if cyclic spawning is enabled
-		if not continue and
-			value.cyclic_spawning ~= nil and
-			value.cyclic_spawning == false then
-			continue = true
-		end
-
-		--if spawner is far away from spawn area don't even try to spawn
-		if not continue and
-			value.absolute_height ~= nil then
-			if value.absolute_height.min ~= nil and
-				value.absolute_height.min
-				> pos.y + (adv_spawning.spawner_distance/2) then
-				continue = true
-			end
-
-			if value.absolute_height.max ~= nil
-				and value.absolute_height.max
-				< pos.y - (adv_spawning.spawner_distance/2) then
-				continue = true
-			end
-		end
-		starttime = adv_spawning.check_time(starttime, key  .. " at spawn range check")
-
-		--check for presence of environment
+		
 		if not continue then
-			local radius =
-				math.sqrt(adv_spawning.spawner_distance*
-							adv_spawning.spawner_distance*2)/2
-
-			if minetest.find_node_near(pos,radius,
-							value.spawn_inside) == nil then
-				continue = false
+			runindex = runindex + 1
+			if not adv_spawning.init_spawner(self, pos, key, value) then
+				return false
 			end
 		end
-		starttime = adv_spawning.check_time(starttime, key .. " at environment check")
-
-		if not continue then
-			self.spawning_data[key] = value.spawn_interval * math.random()
-		else
-			self.spawning_data[key] = nil
-		end
+		
+		adv_spawning.quota_leave()
 	end
 	
 	return self.initialized_spawners == #adv_spawning.spawner_definitions

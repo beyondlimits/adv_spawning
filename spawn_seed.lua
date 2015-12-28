@@ -328,6 +328,11 @@ function adv_spawning.init_spawner(self, pos, name, spawnerdef)
 				return false
 			end
 			
+			if spawnerdef.spawn_inside == nil then
+				print(name .. " tries to spawn within nil")
+				assert(false)
+			end
+			
 			local resultpos = adv_spawning.find_nodes_in(pos, runidx, runidx, spawnerdef.spawn_inside)
 			
 			if (resultpos ~= nil) then

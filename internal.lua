@@ -423,6 +423,10 @@ function adv_spawning.handlespawner(spawnername,spawnerpos,minp,maxp,ignore_acti
 		new_pos.y, yreason = adv_spawning.get_surface(lower_y,upper_y,new_pos,
 							spawndef.spawn_inside)
 	else
+		if spawndef.spawn_inside == nil then
+			print("ERROR: " .. spawnername .. " tries to spawn within nil")
+			assert(false)
+		end
 		new_pos.y, yreason = adv_spawning.get_relative_pos(lower_y,upper_y,new_pos,
 							spawndef.spawn_inside,
 							spawndef.relative_height,
@@ -1660,9 +1664,11 @@ end
 --------------------------------------------------------------------------------
 function adv_spawning.find_nodes_in(pos, min_range, max_range, nodetypes)
 
+	local nodetypes_to_use = nodetypes
+
 	if type(nodetypes) == "string" then
-		local templist = { nodetypes }
-		nodetypes = templist
+		nodetypes_to_use = { }
+		table.insert(nodetypes_to_use, nodetypes)
 	end
 	
 	for i = min_range, max_range, 1 do
@@ -1672,8 +1678,8 @@ function adv_spawning.find_nodes_in(pos, min_range, max_range, nodetypes)
 			local node = minetest.get_node_or_nil(positions[i])
 			
 			if node ~= nil then
-				for i = 1, #nodetypes, 1 do
-					if node.name == nodetypes[i] then
+				for i = 1, #nodetypes_to_use, 1 do
+					if node.name == nodetypes_to_use[i] then
 						return positions[i]
 					end
 				end

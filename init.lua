@@ -8,7 +8,7 @@
 --
 -------------------------------------------------------------------------------
 
-local version = "0.0.12"
+local version = "0.0.13"
 
 if adv_spawning ~= nil then
 	core.log("error", "MOD: adv_spawning requires adv_spawning variable to be available")

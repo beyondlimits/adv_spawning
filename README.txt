@@ -1,3 +1,12 @@
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
++ IMPORTANT:                                                                   +
++ This project is not active for some time,                                    +
++ and due to change of github ownership to microsoft this project              +
++ will never be active on github for sure.                                     +
++ In case this project is revived you'll find it at:                           +
++ https://gitlab.com/sapier                                                    +
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
 ********************************************************************************
 *                                                                              *
 *              Advanced spawning mod (adv_spawning) 0.0.6                      *
